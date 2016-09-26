@@ -32,12 +32,11 @@ void setup(){
   Wire.beginOnPins(SCL_PIN,SDA_PIN);
   Serial.begin(115200);
   pinMode(BOARD_LED,OUTPUT); digitalWrite(BOARD_LED, boardLEDstate);
-  pinMode(LED_EN,OUTPUT); digitalWrite(LED_EN,LOW);
   pinMode(MAX_INT,INPUT);
 
   attachPinInterrupt(MAX_INT,MAX_ISR,LOW);
   LED_timer = millis();
-  Serial.println("\nPulsePatch 01");
+  Serial.println("\nPulsePatch 01\n");
   MAX_init();
   printAllRegisters();
 }
@@ -45,7 +44,6 @@ void setup(){
 
 void loop(){
 
-//  if(digitalRead(MAX_INT) == LOW){
   if(MAX_interrupt){
     serviceInterrupts(); // go see what woke us up, and do the work
     if(sampleCounter == 0x00){  // rolls over to 0 at 200

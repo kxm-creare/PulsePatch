@@ -1,7 +1,5 @@
 /*
-
   developing a library to control the MAX30102 Sp02 Sensor
-
 */
 
 

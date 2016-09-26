@@ -1,8 +1,6 @@
 
 /*
-
   control bytes and register definitions for controling MAX30102
-
 */
 
 //  SIMBLEE PINS
