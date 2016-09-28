@@ -21,7 +21,12 @@ float Fahrenheit;
 char sampleCounter = 0;
 int REDvalue;
 int IRvalue;
-char mode = HR_MODE;  // SPO2_MODE or HR_MODE
+char mode = SPO2_MODE;  // SPO2_MODE or HR_MODE
+char readPointer;
+char writePointer;
+char ovfCounter;
+int rAmp = 20;
+int irAmp = 20;
 
 //  TESTING
 unsigned int thisTestTime;
@@ -30,7 +35,7 @@ unsigned int thatTestTime;
 void setup(){
 
   Wire.beginOnPins(SCL_PIN,SDA_PIN);
-  Serial.begin(115200);
+  Serial.begin(230400);
   pinMode(BOARD_LED,OUTPUT); digitalWrite(BOARD_LED, boardLEDstate);
   pinMode(MAX_INT,INPUT);
 
@@ -83,6 +88,26 @@ void eventSerial(){
         break;
       case '?':
         printAllRegisters();
+
+      case '1':
+        rAmp++; if(rAmp > 50){rAmp = 50;}
+        setLEDamplitude(rAmp, irAmp);
+        serialAmps();
+        break;
+      case '2':
+        rAmp--; if(rAmp < 1){rAmp = 0;}
+        setLEDamplitude(rAmp, irAmp);
+        serialAmps();
+        break;
+      case '3':
+        irAmp++; if(irAmp > 50){irAmp = 50;}
+        setLEDamplitude(rAmp, irAmp);
+        serialAmps();
+        break;
+      case '4':
+        irAmp--; if(irAmp < 1){irAmp = 0;}
+        setLEDamplitude(rAmp, irAmp);
+        serialAmps();
       default:
         break;
     }
@@ -101,3 +126,9 @@ int MAX_ISR(uint32_t dummyPin) { // gotta have a dummyPin...
   MAX_interrupt = true;
   return 0; // gotta return something, somehow...
 }
+
+void serialAmps(){
+  Serial.print("PA\t");
+  Serial.print(rAmp); printTab(); Serial.println(irAmp);
+}
+

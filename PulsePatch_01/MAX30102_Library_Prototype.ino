@@ -22,7 +22,7 @@ void MAX_init(){
   setting = (ADC_RGE_4096 | SR_200 | PW_411) & 0xFF;
   MAX30102_writeRegister(SPO2_CONFIG,setting);
   // set LED pulse amplitude (current in mA)
-  setLEDamplitude(20);
+  setLEDamplitude(rAmp,irAmp);
   // enable interrupts
   short interruptSettings = ( (PPG_RDY<<8) | (ALC_OVF<<8) | TEMP_RDY ) & 0xFFFF; // (A_FULL<<8) |
   MAX_setInterrupts(interruptSettings);
@@ -37,6 +37,7 @@ void enableMAX30102(boolean activate){
 
 void zeroFIFOpointers(){
   MAX30102_writeRegister(FIFO_WRITE,0x00);
+  MAX30102_writeRegister(OVF_COUNTER,0x00);
   MAX30102_writeRegister(FIFO_READ,0x00);
 }
 
@@ -57,8 +58,9 @@ void serviceInterrupts(){
       // go do something...
     }else if((interruptFlags & (PPG_RDY<<8)) > 0){ // PPG data ready
 //      Serial.println("PPG_RDY");
-      readPPG(mode);  // read the light sensor data
-      printPPG();
+//      readPointers();
+      readPPG();  // read the light sensor data that is available
+      serialPPG(); // send the RED and/or IR data 
     }else if((interruptFlags & (ALC_OVF<<8)) > 0){ // Ambient Light Cancellation Overflow
       Serial.println("ALC_OVF");
     }else if((interruptFlags & TEMP_RDY) > 0){  // Temperature Conversion Available
@@ -68,6 +70,14 @@ void serviceInterrupts(){
     }
 }
 
+void readPointers(){
+  readPointer = MAX30102_readRegister(FIFO_READ);
+  ovfCounter = MAX30102_readRegister(OVF_COUNTER);
+  writePointer = MAX30102_readRegister(FIFO_WRITE);
+  Serial.print(readPointer,HEX); printTab();
+  Serial.print(ovfCounter,HEX); printTab();
+  Serial.println(writePointer,HEX);
+}
 
 //  read die temperature to compansate for RED LED
 char tempInteger;
@@ -86,54 +96,63 @@ void printTemp(){
 }
 
 
-void readPPG(uint8_t m){
+void readPPG(){
 //  sampleTimeTest();
   sampleCounter++;
   if(sampleCounter > 200){ sampleCounter = 0; }
-  // use the FIFO read and write pointers
-  REDvalue = readFIFOdata();
-  if(m == SPO2_MODE){
-    IRvalue = readFIFOdata();
-  }
+  // use the FIFO read and write pointers?
+  readFIFOdata();
+
 }
 
 // send PPG value(s) via Serial port
-void printPPG(){
-  Serial.prinln();  // formatting...
+void serialPPG(){
+  Serial.println();  // formatting...
   Serial.print(sampleCounter,DEC); printTab();
   Serial.print(REDvalue);
-  if(mode == SPO2_MODE){
+//  if(mode == SPO2_MODE){
     printTab(); Serial.print(IRvalue);
-  }
+//  }
 }
 
 // read in the FIFO data three bytes per ADC result
-int readFIFOdata(){
-  int data;
-  byte dataByte[3];
+void readFIFOdata(){
+
+  byte dataByte[6];
   int byteCounter = 0;
   Wire.beginTransmission(MAX_ADD);
   Wire.write(FIFO_DATA);
   Wire.endTransmission(false);
-  Wire.requestFrom(MAX_ADD,3);
+  Wire.requestFrom(MAX_ADD,6);
   while(Wire.available()){
     dataByte[byteCounter] = Wire.read();
     byteCounter++;
   }
-  data = (dataByte[0] << 16) | (dataByte[1] << 8) | dataByte[2];
-  return data;
+  REDvalue = 0; IRvalue = 0;
+//  REDvalue = (dataByte[0] << 16) | (dataByte[1] << 8) | dataByte[2];
+//  IRvalue = (dataByte[3] << 16) | (dataByte[4] << 8) | dataByte[5];
+  
+  REDvalue = (dataByte[0] & 0xFF); REDvalue <<= 8; 
+  REDvalue |= dataByte[1]; REDvalue <<= 8;
+  REDvalue |= dataByte[2];
+  IRvalue = (dataByte[3] & 0xFF); IRvalue <<= 8; 
+  IRvalue |= dataByte[4]; IRvalue <<= 8;
+  IRvalue |= dataByte[5]; 
+  
+  REDvalue &= 0x0003FFFF; IRvalue &= 0x0003FFFF;
 }
 
 // set the current amplitude for the LEDs
 // currently uses the same setting for both RED and IR
 // should be able to adjust each dynamically...
-void setLEDamplitude(int I){
-  I *= 1000;
-  I /= 196;
-  byte current = I & 0xFF;
-  MAX30102_writeRegister(RED_PA,current);
+void setLEDamplitude(int Ir, int Iir){
+  Ir *= 1000; Iir *= 1000;
+  Ir /= 196; Iir /= 196;
+  byte currentIR = Iir & 0xFF;
+  byte currentR = Ir & 0xFF;
+  MAX30102_writeRegister(RED_PA,currentR);
   if(mode == SPO2_MODE){
-    MAX30102_writeRegister(IR_PA,current);
+    MAX30102_writeRegister(IR_PA,currentIR);
   }else{
     MAX30102_writeRegister(IR_PA,0x00);
   }
@@ -156,6 +175,8 @@ void MAX_setInterrupts(uint16_t setting){
   Wire.write(lowSetting);
   Wire.endTransmission(true);
 }
+
+
 
 // reads the interrupt status registers
 // returns a 16 bit value
