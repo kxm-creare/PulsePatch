@@ -25,8 +25,8 @@ char mode = SPO2_MODE;  // SPO2_MODE or HR_MODE
 char readPointer;
 char writePointer;
 char ovfCounter;
-int rAmp = 20;
-int irAmp = 20;
+int rAmp = 10;
+int irAmp = 10;
 
 //  TESTING
 unsigned int thisTestTime;
