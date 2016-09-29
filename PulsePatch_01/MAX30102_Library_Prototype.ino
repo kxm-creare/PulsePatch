@@ -19,7 +19,7 @@ void MAX_init(){
   setting = (SMP_AVE_1 | ROLLOVER_EN | 0x0F) & 0xFF;
   MAX30102_writeRegister(FIFO_CONFIG,setting);
   // set Sp02 configuration
-  setting = (ADC_RGE_4096 | SR_200 | PW_411) & 0xFF;
+  setting = (ADC_RGE_4096 | SR_100 | PW_411) & 0xFF;
   MAX30102_writeRegister(SPO2_CONFIG,setting);
   // set LED pulse amplitude (current in mA)
   setLEDamplitude(rAmp,irAmp);
@@ -91,8 +91,10 @@ void readTemp(){
 }
 
 void printTemp(){
-  printTab(); // formatting...
-  Serial.print(Celcius,3); Serial.print("*C");
+  if (!PRINT_ONLY_FOR_PLOTTER) {
+    printTab(); // formatting...
+    Serial.print(Celcius,3); Serial.print("*C");
+  }
 }
 
 
@@ -107,12 +109,19 @@ void readPPG(){
 
 // send PPG value(s) via Serial port
 void serialPPG(){
-  Serial.println();  // formatting...
-  Serial.print(sampleCounter,DEC); printTab();
-  Serial.print(REDvalue);
-//  if(mode == SPO2_MODE){
+  if (!PRINT_ONLY_FOR_PLOTTER) {
+    Serial.println();  // formatting...
+    Serial.print(sampleCounter,DEC); printTab();
+    Serial.print(REDvalue);
+    //  if(mode == SPO2_MODE){
     printTab(); Serial.print(IRvalue);
-//  }
+    //  }
+  } else {
+    Serial.print(REDvalue);
+    Serial.print(" ");
+    Serial.println(IRvalue);
+  }
+   
 }
 
 // read in the FIFO data three bytes per ADC result
