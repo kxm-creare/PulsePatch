@@ -71,3 +71,8 @@
 #define PW_215  0x02
 #define PW_411  0x03
 #define TEMP_EN 0x01
+
+// filter stuff
+#define CUTTOFF_LOW 0.5
+#define CUTTOFF_HIGH 10.0
+#define NUM_SAMPLES 10

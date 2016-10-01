@@ -4,8 +4,8 @@
 
 
 
-void MAX_init(){
-  uint8_t setting;
+void MAX_init(char sr){
+  char setting;
   // reset the MAX30102
   setting = RESET;
   MAX30102_writeRegister(MODE_CONFIG,setting);
@@ -19,7 +19,8 @@ void MAX_init(){
   setting = (SMP_AVE_1 | ROLLOVER_EN | 0x0F) & 0xFF;
   MAX30102_writeRegister(FIFO_CONFIG,setting);
   // set Sp02 configuration
-  setting = (ADC_RGE_4096 | SR_100 | PW_411) & 0xFF;
+  sampleRate = sr;
+  setting = (ADC_RGE_4096 | sampleRate | PW_411) & 0xFF;
   MAX30102_writeRegister(SPO2_CONFIG,setting);
   // set LED pulse amplitude (current in mA)
   setLEDamplitude(rAmp,irAmp);
@@ -29,7 +30,7 @@ void MAX_init(){
 }
 
 void enableMAX30102(boolean activate){
-  uint8_t setting = mode;
+  char setting = mode;
   zeroFIFOpointers();
   if(!activate){ setting |= 0x80; }
   MAX30102_writeRegister(MODE_CONFIG,setting);
@@ -43,8 +44,8 @@ void zeroFIFOpointers(){
 
 // report RevID and PartID for verification
 void getDeviceInfo(){
-  uint8_t revID = MAX30102_readRegister(REV_ID);
-  uint8_t partID = MAX30102_readRegister(PART_ID);
+  char revID = MAX30102_readRegister(REV_ID);
+  char partID = MAX30102_readRegister(PART_ID);
   Serial.print("Rev ID: 0x"); Serial.print(revID,HEX);
   Serial.print("\tPart ID: 0x"); Serial.println(partID,HEX);
 }
@@ -112,22 +113,28 @@ void serialPPG(){
   if (!PRINT_ONLY_FOR_PLOTTER) {
     Serial.println();  // formatting...
     Serial.print(sampleCounter,DEC); printTab();
-    Serial.print(REDvalue);
-    //  if(mode == SPO2_MODE){
-    printTab(); Serial.print(IRvalue);
-    //  }
+    Serial.print(REDvalue); printTab();
+    Serial.print(IRvalue);
   } else {
-    Serial.print(REDvalue);
-    Serial.print(" ");
-    Serial.println(IRvalue);
+    if(useFilter){
+      Serial.print(HPfilterOutputRED[NUM_SAMPLES-1]); printSpace(); 
+      Serial.print(HPfilterOutputIR[NUM_SAMPLES-1]);
+    } else {
+      Serial.print(REDvalue); printSpace();
+      Serial.print(IRvalue);
+    }
+    Serial.println();
   }
-   
+}
+
+void printSpace(){
+   Serial.print(" ");
 }
 
 // read in the FIFO data three bytes per ADC result
 void readFIFOdata(){
 
-  byte dataByte[6];
+  char dataByte[6];
   int byteCounter = 0;
   Wire.beginTransmission(MAX_ADD);
   Wire.write(FIFO_DATA);
@@ -149,6 +156,11 @@ void readFIFOdata(){
   IRvalue |= dataByte[5]; 
   
   REDvalue &= 0x0003FFFF; IRvalue &= 0x0003FFFF;
+//  REDvalue >>= 3; IRvalue >>= 3;
+//  REDvalue &= 0x0003FFF8; IRvalue &= 0x0003FFF8;
+  if(useFilter){
+    filterHP(REDvalue, IRvalue);
+  }
 }
 
 // set the current amplitude for the LEDs
@@ -157,8 +169,8 @@ void readFIFOdata(){
 void setLEDamplitude(int Ir, int Iir){
   Ir *= 1000; Iir *= 1000;
   Ir /= 196; Iir /= 196;
-  byte currentIR = Iir & 0xFF;
-  byte currentR = Ir & 0xFF;
+  char currentIR = Iir & 0xFF;
+  char currentR = Ir & 0xFF;
   MAX30102_writeRegister(RED_PA,currentR);
   if(mode == SPO2_MODE){
     MAX30102_writeRegister(IR_PA,currentIR);
@@ -176,8 +188,8 @@ void sampleTimeTest(){
 
 // set the desired interrupt flags
 void MAX_setInterrupts(uint16_t setting){
-  uint8_t highSetting = (setting >> 8) & 0xFF;
-  uint8_t lowSetting = setting & 0xFF;
+  char highSetting = (setting >> 8) & 0xFF;
+  char lowSetting = setting & 0xFF;
   Wire.beginTransmission(MAX_ADD);
   Wire.write(ENABLE_1);
   Wire.write(highSetting);
@@ -195,7 +207,7 @@ uint16_t MAX_readInterrupts(){
 }
 
 // writes one register to the MAX30102
-void MAX30102_writeRegister(uint8_t reg, uint8_t setting){
+void MAX30102_writeRegister(char reg, char setting){
   Wire.beginTransmission(MAX_ADD);
   Wire.write(reg);
   Wire.write(setting);
@@ -203,8 +215,8 @@ void MAX30102_writeRegister(uint8_t reg, uint8_t setting){
 }
 
 // reads one register from the MAX30102
-uint8_t MAX30102_readRegister(uint8_t reg){
-  uint8_t inChar;
+char MAX30102_readRegister(char reg){
+  char inChar;
   Wire.beginTransmission(MAX_ADD);
   Wire.write(reg);
   Wire.endTransmission(false);
@@ -216,8 +228,8 @@ uint8_t MAX30102_readRegister(uint8_t reg){
 }
 
 // reads two successive registers from the MAX30102
-short MAX30102_readShort(uint8_t startReg){
-  uint8_t inChar[2];
+short MAX30102_readShort(char startReg){
+  char inChar[2];
   short Shorty;
   int byteCounter = 0;
   Wire.beginTransmission(MAX_ADD);
@@ -269,7 +281,7 @@ void printAllRegisters(){
 }
 
 // helps to print out register values
-void readWireAndPrintHex(byte startReg){
+void readWireAndPrintHex(char startReg){
   char inChar;
   while(Wire.available()){
     inChar = Wire.read();
@@ -281,7 +293,7 @@ void readWireAndPrintHex(byte startReg){
 
 
 // helps with verbose feedback
-void printRegName(uint8_t regToPrint){
+void printRegName(char regToPrint){
 
   switch(regToPrint){
     case STATUS_1:

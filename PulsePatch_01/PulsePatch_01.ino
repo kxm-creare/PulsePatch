@@ -1,9 +1,7 @@
 /*
-
   Pulse Patch
   This code targets a Simblee
   I2C Interface with MAX30102 Sp02 Sensor Module
-
 */
 
 #include <Wire.h>
@@ -30,21 +28,35 @@ char ovfCounter;
 int rAmp = 10;
 int irAmp = 10;
 
+
 //  TESTING
 unsigned int thisTestTime;
 unsigned int thatTestTime;
 
+char sampleRate;
+boolean useFilter = false;
+int gain = 10;
+float HPfilterInputRED[NUM_SAMPLES];
+float HPfilterOutputRED[NUM_SAMPLES];
+float LPfilterInputRED[NUM_SAMPLES];
+float LPfilterOutputRED[NUM_SAMPLES];
+float HPfilterInputIR[NUM_SAMPLES];
+float HPfilterOutputIR[NUM_SAMPLES];
+float LPfilterInputIR[NUM_SAMPLES];
+float LPfilterOutputIR[NUM_SAMPLES];
+
 void setup(){
+
   Wire.beginOnPins(SCL_PIN,SDA_PIN);
   Serial.begin(230400);
   pinMode(BOARD_LED,OUTPUT); digitalWrite(BOARD_LED, boardLEDstate);
   pinMode(MAX_INT,INPUT);
 
   attachPinInterrupt(MAX_INT,MAX_ISR,LOW);
-  LED_timer = millis();
   if (!PRINT_ONLY_FOR_PLOTTER) Serial.println("\nPulsePatch 01\n");
-  MAX_init();
-
+  LED_timer = millis();
+  MAX_init(SR_100); // initialize MAX30102, specify sampleRate
+  if (useFilter){ initFilter(); }
   if (!PRINT_ONLY_FOR_PLOTTER) {
     printAllRegisters();
     Serial.println("");
@@ -59,6 +71,7 @@ void setup(){
 
 
 void loop(){
+
   if(MAX_interrupt){
     serviceInterrupts(); // go see what woke us up, and do the work
     if(sampleCounter == 0x00){  // rolls over to 0 at 200
@@ -68,12 +81,13 @@ void loop(){
 
   blinkBoardLED();
 
+
   eventSerial();
 }
 
 void eventSerial(){
   while(Serial.available()){
-    byte inByte = Serial.read();
+    char inByte = Serial.read();
     uint16_t intSource;
     switch(inByte){
       case 'h':
@@ -100,7 +114,14 @@ void eventSerial(){
         break;
       case '?':
         printAllRegisters();
+        break;
 
+      case 'f':
+        useFilter = false;
+        break;
+      case 'F':
+        useFilter = true;
+        break;
       case '1':
         rAmp++; if(rAmp > 50){rAmp = 50;}
         setLEDamplitude(rAmp, irAmp);
@@ -126,6 +147,14 @@ void eventSerial(){
   }
 }
 
+void blinkBoardLED(){
+  if(millis()-LED_timer > LED_delayTime){
+      LED_timer = millis();
+      boardLEDstate = !boardLEDstate;
+      digitalWrite(BOARD_LED,boardLEDstate);
+    }
+}
+
 //Print out all of the commands so that the user can see what to do
 //Added: Chip 2016-09-28
 void printHelpToSerial() {
@@ -141,14 +170,8 @@ void printHelpToSerial() {
   Serial.println(F("   '3'  Increase IR LED intensity"));
   Serial.println(F("   '4'  Decrease IR LED intensity"));
   Serial.println(F("   '?'  Print all registers"));
-}
-
-void blinkBoardLED(){
-  if(millis()-LED_timer > LED_delayTime){
-      LED_timer = millis();
-      boardLEDstate = !boardLEDstate;
-      digitalWrite(BOARD_LED,boardLEDstate);
-    }
+  Serial.println(F("   'F'  Turn on filters"));
+  Serial.println(F("   'f'  Turn off filters"));
 }
 
 int MAX_ISR(uint32_t dummyPin) { // gotta have a dummyPin...
@@ -160,4 +183,3 @@ void serialAmps(){
   Serial.print("PA\t");
   Serial.print(rAmp); printTab(); Serial.println(irAmp);
 }
-
