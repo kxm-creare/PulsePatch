@@ -9,8 +9,6 @@
 #include <Wire.h>
 #include "MAX30102_Definitions.h"
 
-//This line added by Chip 2016-09-28 to enable plotting by Arduino Serial Plotter
-const int PRINT_ONLY_FOR_PLOTTER = 1;  //Set this to zero to return normal verbose print() statements
 
 unsigned int LED_timer;
 int LED_delayTime = 300;
@@ -30,8 +28,6 @@ char ovfCounter;
 int rAmp = 10;
 int irAmp = 10;
 char sampleRate;
-boolean useFilter = true;
-int gain = 10;
 
 //  TESTING
 unsigned int thisTestTime;
@@ -45,20 +41,10 @@ void setup(){
   pinMode(MAX_INT,INPUT);
 
   attachPinInterrupt(MAX_INT,MAX_ISR,LOW);
-  if (!PRINT_ONLY_FOR_PLOTTER) Serial.println("\nPulsePatch 01\n");
   LED_timer = millis();
-  MAX_init(SR_100); // initialize MAX30102, specify sampleRate
-  if (useFilter){ initFilter(); }
-  if (!PRINT_ONLY_FOR_PLOTTER) {
-    printAllRegisters();
-    Serial.println("");
-    printHelpToSerial();
-    Serial.println("");
-  } else {
-    //when configured for the Arduino Serial Plotter, start the system running right away
-    enableMAX30102(true);
-    thatTestTime = micros();
-  }
+  Serial.println("\nPulsePatch 01\n");
+  MAX_init(SR_100);
+  printAllRegisters();
 }
 
 
@@ -82,9 +68,6 @@ void eventSerial(){
     char inByte = Serial.read();
     uint16_t intSource;
     switch(inByte){
-      case 'h':
-        printHelpToSerial();
-        break;
       case 'b':
         Serial.println("start running");
         enableMAX30102(true);
@@ -138,23 +121,6 @@ void blinkBoardLED(){
       boardLEDstate = !boardLEDstate;
       digitalWrite(BOARD_LED,boardLEDstate);
     }
-}
-
-//Print out all of the commands so that the user can see what to do
-//Added: Chip 2016-09-28
-void printHelpToSerial() {
-  Serial.println(F("Commands:"));
-  Serial.println(F("   'h'  Print this help information on available commands"));
-  Serial.println(F("   'b'  Start the thing running at the sample rate selected"));
-  Serial.println(F("   's'  Stop the thing running"));
-  Serial.println(F("   't'  Initiate a temperature conversion. This should work if 'b' is pressed or not"));
-  Serial.println(F("   'i'  Query the interrupt flags register. Not really useful"));
-  Serial.println(F("   'v'  Verify the device by querying the RevID and PartID registers (hex 6 and hex 15 respectively)"));
-  Serial.println(F("   '1'  Increase red LED intensity"));
-  Serial.println(F("   '2'  Decrease red LED intensity"));
-  Serial.println(F("   '3'  Increase IR LED intensity"));
-  Serial.println(F("   '4'  Decrease IR LED intensity"));
-  Serial.println(F("   '?'  Print all registers"));
 }
 
 int MAX_ISR(uint32_t dummyPin) { // gotta have a dummyPin...

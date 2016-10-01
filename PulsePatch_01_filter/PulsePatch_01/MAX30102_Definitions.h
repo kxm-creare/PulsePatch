@@ -73,5 +73,6 @@
 #define TEMP_EN 0x01
 
 // filter stuff
-#define CUTTOFF 0.5
-#define NUM_SAMPLES 32
+#define CUTTOFF_LOW 0.5
+#define CUTTOFF_HIGH 10.0
+#define NUM_SAMPLES 10

@@ -29,13 +29,23 @@ char writePointer;
 char ovfCounter;
 int rAmp = 10;
 int irAmp = 10;
-char sampleRate;
-boolean useFilter = true;
-int gain = 10;
+
 
 //  TESTING
 unsigned int thisTestTime;
 unsigned int thatTestTime;
+
+char sampleRate;
+boolean useFilter = false;
+int gain = 10;
+float HPfilterInputRED[NUM_SAMPLES];
+float HPfilterOutputRED[NUM_SAMPLES];
+float LPfilterInputRED[NUM_SAMPLES];
+float LPfilterOutputRED[NUM_SAMPLES];
+float HPfilterInputIR[NUM_SAMPLES];
+float HPfilterOutputIR[NUM_SAMPLES];
+float LPfilterInputIR[NUM_SAMPLES];
+float LPfilterOutputIR[NUM_SAMPLES];
 
 void setup(){
 
@@ -106,7 +116,14 @@ void eventSerial(){
         break;
       case '?':
         printAllRegisters();
+        break;
 
+      case 'f':
+        useFilter = false;
+        break;
+      case 'F':
+        useFilter = true;
+        break;
       case '1':
         rAmp++; if(rAmp > 50){rAmp = 50;}
         setLEDamplitude(rAmp, irAmp);
@@ -155,6 +172,8 @@ void printHelpToSerial() {
   Serial.println(F("   '3'  Increase IR LED intensity"));
   Serial.println(F("   '4'  Decrease IR LED intensity"));
   Serial.println(F("   '?'  Print all registers"));
+  Serial.println(F("   'F'  Turn on filters"));
+  Serial.println(F("   'f'  Turn off filters"));
 }
 
 int MAX_ISR(uint32_t dummyPin) { // gotta have a dummyPin...

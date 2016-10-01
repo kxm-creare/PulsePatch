@@ -116,11 +116,12 @@ void serialPPG(){
     Serial.print(REDvalue); printTab();
     Serial.print(IRvalue);
   } else {
-    Serial.print(REDvalue); printSpace();
-    Serial.print(IRvalue);
-    if(useFilters){
-      printSpace(); Serial.print(filterOutputRED[NUM_SAMPLES-1];
-      printSpace(); Serial.print(filterOutputIR[NUM_SAMPLES-1];
+    if(useFilter){
+      Serial.print(HPfilterOutputRED[NUM_SAMPLES-1]); printSpace(); 
+      Serial.print(HPfilterOutputIR[NUM_SAMPLES-1]);
+    } else {
+      Serial.print(REDvalue); printSpace();
+      Serial.print(IRvalue);
     }
     Serial.println();
   }
@@ -155,6 +156,8 @@ void readFIFOdata(){
   IRvalue |= dataByte[5]; 
   
   REDvalue &= 0x0003FFFF; IRvalue &= 0x0003FFFF;
+//  REDvalue >>= 3; IRvalue >>= 3;
+//  REDvalue &= 0x0003FFF8; IRvalue &= 0x0003FFF8;
   if(useFilter){
     filterHP(REDvalue, IRvalue);
   }

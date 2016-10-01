@@ -92,10 +92,8 @@ void readTemp(){
 }
 
 void printTemp(){
-  if (!PRINT_ONLY_FOR_PLOTTER) {
-    printTab(); // formatting...
-    Serial.print(Celcius,3); Serial.print("*C");
-  }
+  printTab(); // formatting...
+  Serial.print(Celcius,3); Serial.print("*C");
 }
 
 
@@ -110,24 +108,12 @@ void readPPG(){
 
 // send PPG value(s) via Serial port
 void serialPPG(){
-  if (!PRINT_ONLY_FOR_PLOTTER) {
-    Serial.println();  // formatting...
-    Serial.print(sampleCounter,DEC); printTab();
-    Serial.print(REDvalue); printTab();
-    Serial.print(IRvalue);
-  } else {
-    Serial.print(REDvalue); printSpace();
-    Serial.print(IRvalue);
-    if(useFilters){
-      printSpace(); Serial.print(filterOutputRED[NUM_SAMPLES-1];
-      printSpace(); Serial.print(filterOutputIR[NUM_SAMPLES-1];
-    }
-    Serial.println();
-  }
-}
-
-void printSpace(){
-   Serial.print(" ");
+  Serial.println();  // formatting...
+  Serial.print(sampleCounter,DEC); printTab();
+  Serial.print(REDvalue);
+//  if(mode == SPO2_MODE){
+    printTab(); Serial.print(IRvalue);
+//  }
 }
 
 // read in the FIFO data three bytes per ADC result
@@ -155,9 +141,6 @@ void readFIFOdata(){
   IRvalue |= dataByte[5]; 
   
   REDvalue &= 0x0003FFFF; IRvalue &= 0x0003FFFF;
-  if(useFilter){
-    filterHP(REDvalue, IRvalue);
-  }
 }
 
 // set the current amplitude for the LEDs
