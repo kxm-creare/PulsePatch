@@ -38,7 +38,6 @@ unsigned int thisTestTime;
 unsigned int thatTestTime;
 
 void setup(){
-
   Wire.beginOnPins(SCL_PIN,SDA_PIN);
   Serial.begin(230400);
   pinMode(BOARD_LED,OUTPUT); digitalWrite(BOARD_LED, boardLEDstate);
@@ -47,8 +46,14 @@ void setup(){
   attachPinInterrupt(MAX_INT,MAX_ISR,LOW);
   if (!PRINT_ONLY_FOR_PLOTTER) Serial.println("\nPulsePatch 01\n");
   LED_timer = millis();
+<<<<<<< HEAD
   MAX_init(SR_100); // initialize MAX30102, specify sampleRate
   if (useFilter){ initFilter(); }
+=======
+  if (!PRINT_ONLY_FOR_PLOTTER) Serial.println("\nPulsePatch 01\n");
+  MAX_init();
+
+>>>>>>> origin/master
   if (!PRINT_ONLY_FOR_PLOTTER) {
     printAllRegisters();
     Serial.println("");
@@ -63,7 +68,6 @@ void setup(){
 
 
 void loop(){
-
   if(MAX_interrupt){
     serviceInterrupts(); // go see what woke us up, and do the work
     if(sampleCounter == 0x00){  // rolls over to 0 at 200
@@ -72,7 +76,6 @@ void loop(){
   }
 
   blinkBoardLED();
-
 
   eventSerial();
 }
@@ -130,6 +133,23 @@ void eventSerial(){
         break;
     }
   }
+}
+
+//Print out all of the commands so that the user can see what to do
+//Added: Chip 2016-09-28
+void printHelpToSerial() {
+  Serial.println(F("Commands:"));
+  Serial.println(F("   'h'  Print this help information on available commands"));
+  Serial.println(F("   'b'  Start the thing running at the sample rate selected"));
+  Serial.println(F("   's'  Stop the thing running"));
+  Serial.println(F("   't'  Initiate a temperature conversion. This should work if 'b' is pressed or not"));
+  Serial.println(F("   'i'  Query the interrupt flags register. Not really useful"));
+  Serial.println(F("   'v'  Verify the device by querying the RevID and PartID registers (hex 6 and hex 15 respectively)"));
+  Serial.println(F("   '1'  Increase red LED intensity"));
+  Serial.println(F("   '2'  Decrease red LED intensity"));
+  Serial.println(F("   '3'  Increase IR LED intensity"));
+  Serial.println(F("   '4'  Decrease IR LED intensity"));
+  Serial.println(F("   '?'  Print all registers"));
 }
 
 void blinkBoardLED(){
