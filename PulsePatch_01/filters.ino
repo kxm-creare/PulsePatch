@@ -1,7 +1,5 @@
 /*
-
   SIMPLE HIGH PASS FILTER
-
 */
 
 
@@ -53,4 +51,3 @@ void filterHP(int rVal, int irVal){
     HPfilterInputIR[i] = HPfilterInputIR[i-1];
   }
 }
-

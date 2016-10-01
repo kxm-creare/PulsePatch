@@ -19,12 +19,8 @@ void MAX_init(char sr){
   setting = (SMP_AVE_1 | ROLLOVER_EN | 0x0F) & 0xFF;
   MAX30102_writeRegister(FIFO_CONFIG,setting);
   // set Sp02 configuration
-<<<<<<< HEAD
   sampleRate = sr;
   setting = (ADC_RGE_4096 | sampleRate | PW_411) & 0xFF;
-=======
-  setting = (ADC_RGE_4096 | SR_100 | PW_411) & 0xFF;
->>>>>>> origin/master
   MAX30102_writeRegister(SPO2_CONFIG,setting);
   // set LED pulse amplitude (current in mA)
   setLEDamplitude(rAmp,irAmp);
@@ -117,15 +113,15 @@ void serialPPG(){
   if (!PRINT_ONLY_FOR_PLOTTER) {
     Serial.println();  // formatting...
     Serial.print(sampleCounter,DEC); printTab();
-<<<<<<< HEAD
     Serial.print(REDvalue); printTab();
     Serial.print(IRvalue);
   } else {
-    Serial.print(REDvalue); printSpace();
-    Serial.print(IRvalue);
-    if(useFilters){
-      printSpace(); Serial.print(filterOutputRED[NUM_SAMPLES-1];
-      printSpace(); Serial.print(filterOutputIR[NUM_SAMPLES-1];
+    if(useFilter){
+      Serial.print(HPfilterOutputRED[NUM_SAMPLES-1]); printSpace(); 
+      Serial.print(HPfilterOutputIR[NUM_SAMPLES-1]);
+    } else {
+      Serial.print(REDvalue); printSpace();
+      Serial.print(IRvalue);
     }
     Serial.println();
   }
@@ -133,18 +129,6 @@ void serialPPG(){
 
 void printSpace(){
    Serial.print(" ");
-=======
-    Serial.print(REDvalue);
-    //  if(mode == SPO2_MODE){
-    printTab(); Serial.print(IRvalue);
-    //  }
-  } else {
-    Serial.print(REDvalue);
-    Serial.print(" ");
-    Serial.println(IRvalue);
-  }
-   
->>>>>>> origin/master
 }
 
 // read in the FIFO data three bytes per ADC result
@@ -172,6 +156,8 @@ void readFIFOdata(){
   IRvalue |= dataByte[5]; 
   
   REDvalue &= 0x0003FFFF; IRvalue &= 0x0003FFFF;
+//  REDvalue >>= 3; IRvalue >>= 3;
+//  REDvalue &= 0x0003FFF8; IRvalue &= 0x0003FFF8;
   if(useFilter){
     filterHP(REDvalue, IRvalue);
   }
