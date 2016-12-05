@@ -4,10 +4,18 @@
 */
 
 //  SIMBLEE PINS
-#define BOARD_LED 12  // on board LED
-#define MAX_INT 25    // MAX30102 interrupts on this Simblee pin
-#define SCL_PIN 13
-#define SDA_PIN 10
+#define RED_LED 22  // red LED
+#define GRN_LED 28  // green LED
+#define TACT_SWITCH 30
+#define MAX_INT 12    // MAX30102 interrupts on this Simblee pin
+#define SCL_PIN 10
+#define SDA_PIN 13
+#define S25_SS  19
+#define WP  17
+#define CS  18
+#define S25_RST 16
+#define HOLD  15
+
 
 
 //  MAX30102 REGISTERS

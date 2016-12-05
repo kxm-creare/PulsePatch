@@ -8,11 +8,12 @@
 #include "MAX30102_Definitions.h"
 
 //This line added by Chip 2016-09-28 to enable plotting by Arduino Serial Plotter
-const int PRINT_ONLY_FOR_PLOTTER = 1;  //Set this to zero to return normal verbose print() statements
+const int PRINT_ONLY_FOR_PLOTTER = 0;  //Set this to zero to return normal verbose print() statements
 
 unsigned int LED_timer;
 int LED_delayTime = 300;
 boolean boardLEDstate = HIGH;
+int lastSwitchState;
 volatile boolean MAX_interrupt = false;
 short interruptSetting;
 short interruptFlags;
@@ -49,8 +50,11 @@ void setup(){
 
   Wire.beginOnPins(SCL_PIN,SDA_PIN);
   Serial.begin(230400);
-  pinMode(BOARD_LED,OUTPUT); digitalWrite(BOARD_LED, boardLEDstate);
-  pinMode(MAX_INT,INPUT);
+  pinMode(RED_LED,OUTPUT); digitalWrite(RED_LED, boardLEDstate);
+  pinMode(GRN_LED,OUTPUT); digitalWrite(GRN_LED, !boardLEDstate);
+  pinMode(TACT_SWITCH,INPUT);
+  lastSwitchState = digitalRead(TACT_SWITCH);
+  pinMode(MAX_INT,INPUT_PULLUP);
 
   attachPinInterrupt(MAX_INT,MAX_ISR,LOW);
   if (!PRINT_ONLY_FOR_PLOTTER) Serial.println("\nPulsePatch 01\n");
@@ -59,9 +63,9 @@ void setup(){
   if (useFilter){ initFilter(); }
   if (!PRINT_ONLY_FOR_PLOTTER) {
     printAllRegisters();
-    Serial.println("");
+    Serial.println();
     printHelpToSerial();
-    Serial.println("");
+    Serial.println();
   } else {
     //when configured for the Arduino Serial Plotter, start the system running right away
     enableMAX30102(true);
@@ -79,8 +83,8 @@ void loop(){
     }
   }
 
-  blinkBoardLED();
-
+  blinkBoardLEDs();
+  readSwitch();
 
   eventSerial();
 }
@@ -147,13 +151,27 @@ void eventSerial(){
   }
 }
 
-void blinkBoardLED(){
+void blinkBoardLEDs(){
   if(millis()-LED_timer > LED_delayTime){
       LED_timer = millis();
       boardLEDstate = !boardLEDstate;
-      digitalWrite(BOARD_LED,boardLEDstate);
+      digitalWrite(RED_LED,boardLEDstate);
+      digitalWrite(GRN_LED,!boardLEDstate);
     }
 }
+
+void readSwitch(){
+  int switchState = digitalRead(TACT_SWITCH);
+  if(switchState != lastSwitchState){
+    delay(10);
+    switchState = digitalRead(TACT_SWITCH);
+    if(switchState != lastSwitchState){
+      lastSwitchState = switchState;
+      Serial.print("switch = "); Serial.println(switchState);
+    }
+  }
+}
+
 
 //Print out all of the commands so that the user can see what to do
 //Added: Chip 2016-09-28
