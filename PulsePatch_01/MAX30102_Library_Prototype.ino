@@ -54,8 +54,9 @@ void getDeviceInfo(){
 void serviceInterrupts(){
     MAX_interrupt = false;  // reset this software flag
     interruptFlags = MAX_readInterrupts();  // read interrupt registers
+//    Serial.println(interruptFlags,HEX);
     if((interruptFlags & A_FULL<<8) > 0){ // FIFO Almost Full
-      Serial.println("A_FULL");
+//      Serial.println("A_FULL");
       // go do something...
     }else if((interruptFlags & (PPG_RDY<<8)) > 0){ // PPG data ready
 //      Serial.println("PPG_RDY");
@@ -63,7 +64,7 @@ void serviceInterrupts(){
       readPPG();  // read the light sensor data that is available
       serialPPG(); // send the RED and/or IR data 
     }else if((interruptFlags & (ALC_OVF<<8)) > 0){ // Ambient Light Cancellation Overflow
-      Serial.println("ALC_OVF");
+//      Serial.println("ALC_OVF");
     }else if((interruptFlags & TEMP_RDY) > 0){  // Temperature Conversion Available
 //      Serial.println("TEMP_RDY");
       readTemp();
