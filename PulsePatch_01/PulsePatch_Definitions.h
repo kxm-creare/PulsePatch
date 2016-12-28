@@ -16,6 +16,10 @@
 #define S25_RST 16
 #define HOLD  15
 
+// OUTPUT TYPES
+#define OUTPUT_NORMAL 0
+#define OUTPUT_PLOTTER 1
+#define OUTPUT_BLE 2
 
 
 //  MAX30102 REGISTERS

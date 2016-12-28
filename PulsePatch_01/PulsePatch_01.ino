@@ -5,10 +5,16 @@
 */
 
 #include <Wire.h>
-#include "MAX30102_Definitions.h"
+#include "PulsePatch_Definitions.h"
+//#include "PulsePatch.h"
+#include <SimbleeBLE.h>
 
-//This line added by Chip 2016-09-28 to enable plotting by Arduino Serial Plotter
-const int PRINT_ONLY_FOR_PLOTTER = 0;  //Set this to zero to return normal verbose print() statements
+//Added by Chip 2016-09-28 to enable plotting by Arduino Serial Plotter
+//Modified by Joel December, 2016
+//Set to OUTPUT_NORMAL for normal verbose print() statements
+//Set to OUTPUT_PLOTTER for Arduino Serial Plotter formatting
+//Set to OUTPUT_BLE to enable BLE
+const int OUTPUT_TYPE = OUTPUT_BLE;
 
 unsigned int LED_timer;
 int LED_delayTime = 300;
@@ -17,11 +23,14 @@ int lastSwitchState;
 volatile boolean MAX_interrupt = false;
 short interruptSetting;
 short interruptFlags;
+char tempInteger;
+char tempFraction;
 float Celcius;
 float Fahrenheit;
-char sampleCounter = 0;
-int REDvalue;
-int IRvalue;
+char sampleCounter = 0xFF;
+int packetSampleNumber = 1;
+int REDvalue[4];
+int IRvalue[4];
 char mode = SPO2_MODE;  // SPO2_MODE or HR_MODE
 char readPointer;
 char writePointer;
@@ -34,6 +43,7 @@ int irAmp = 10;
 unsigned int thisTestTime;
 unsigned int thatTestTime;
 
+// FILTER STUFF
 char sampleRate;
 boolean useFilter = false;
 int gain = 10;
@@ -46,22 +56,42 @@ float HPfilterOutputIR[NUM_SAMPLES];
 float LPfilterInputIR[NUM_SAMPLES];
 float LPfilterOutputIR[NUM_SAMPLES];
 
+// BLE STUFF
+boolean BLEconnected = false;
+char radioBuffer[20];
+
 void setup(){
 
   Wire.beginOnPins(SCL_PIN,SDA_PIN);
-  Serial.begin(230400);
+  boardLEDstate = true;
   pinMode(RED_LED,OUTPUT); digitalWrite(RED_LED, boardLEDstate);
   pinMode(GRN_LED,OUTPUT); digitalWrite(GRN_LED, !boardLEDstate);
   pinMode(TACT_SWITCH,INPUT);
   lastSwitchState = digitalRead(TACT_SWITCH);
   pinMode(MAX_INT,INPUT_PULLUP);
-
   attachPinInterrupt(MAX_INT,MAX_ISR,LOW);
-  if (!PRINT_ONLY_FOR_PLOTTER) Serial.println("\nPulsePatch 01\n");
+
+  switch (OUTPUT_TYPE){
+    case OUTPUT_NORMAL:
+      Serial.println("\nPulsePatch 010\n");
+      Serial.begin(230400);
+      break;
+    case OUTPUT_PLOTTER:
+      Serial.begin(230400);
+      break;
+    case OUTPUT_BLE:
+      Serial.begin(9600);
+      SimbleeBLE.advertisementData = "PulsePatch 0.1.0";
+//      Serial.println("BLE advertizing Pulse Patch");
+      SimbleeBLE.begin();
+      break;
+    default: break;
+  }
+
   LED_timer = millis();
-  MAX_init(SR_100); // initialize MAX30102, specify sampleRate
+  MAX_init(SR_200); // initialize MAX30102, specify sampleRate
   if (useFilter){ initFilter(); }
-  if (!PRINT_ONLY_FOR_PLOTTER) {
+  if (OUTPUT_TYPE != OUTPUT_PLOTTER) {
     printAllRegisters();
     Serial.println();
     printHelpToSerial();
@@ -78,9 +108,6 @@ void loop(){
 
   if(MAX_interrupt){
     serviceInterrupts(); // go see what woke us up, and do the work
-    if(sampleCounter == 0x00){  // rolls over to 0 at 200
-      MAX30102_writeRegister(TEMP_CONFIG,0x01); // take temperature
-    }
   }
 
   blinkBoardLEDs();
@@ -89,74 +116,15 @@ void loop(){
   eventSerial();
 }
 
-void eventSerial(){
-  while(Serial.available()){
-    char inByte = Serial.read();
-    uint16_t intSource;
-    switch(inByte){
-      case 'h':
-        printHelpToSerial();
-        break;
-      case 'b':
-        Serial.println("start running");
-        enableMAX30102(true);
-        thatTestTime = micros();
-        break;
-      case 's':
-        Serial.println("stop running");
-        enableMAX30102(false);
-        break;
-      case 't':
-        MAX30102_writeRegister(TEMP_CONFIG,0x01);
-        break;
-      case 'i':
-        intSource = MAX30102_readShort(STATUS_1);
-        Serial.print("intSource: 0x"); Serial.println(intSource,HEX);
-        break;
-      case 'v':
-        getDeviceInfo();
-        break;
-      case '?':
-        printAllRegisters();
-        break;
 
-      case 'f':
-        useFilter = false;
-        break;
-      case 'F':
-        useFilter = true;
-        break;
-      case '1':
-        rAmp++; if(rAmp > 50){rAmp = 50;}
-        setLEDamplitude(rAmp, irAmp);
-        serialAmps();
-        break;
-      case '2':
-        rAmp--; if(rAmp < 1){rAmp = 0;}
-        setLEDamplitude(rAmp, irAmp);
-        serialAmps();
-        break;
-      case '3':
-        irAmp++; if(irAmp > 50){irAmp = 50;}
-        setLEDamplitude(rAmp, irAmp);
-        serialAmps();
-        break;
-      case '4':
-        irAmp--; if(irAmp < 1){irAmp = 0;}
-        setLEDamplitude(rAmp, irAmp);
-        serialAmps();
-      default:
-        break;
-    }
-  }
-}
 
+// RED_LED blinks when not connected to BLE
+// GRN_LED steady on when BLE connected
 void blinkBoardLEDs(){
-  if(millis()-LED_timer > LED_delayTime){
+  if((millis()-LED_timer > LED_delayTime) && !BLEconnected){
       LED_timer = millis();
       boardLEDstate = !boardLEDstate;
       digitalWrite(RED_LED,boardLEDstate);
-      digitalWrite(GRN_LED,!boardLEDstate);
     }
 }
 
@@ -175,22 +143,7 @@ void readSwitch(){
 
 //Print out all of the commands so that the user can see what to do
 //Added: Chip 2016-09-28
-void printHelpToSerial() {
-  Serial.println(F("Commands:"));
-  Serial.println(F("   'h'  Print this help information on available commands"));
-  Serial.println(F("   'b'  Start the thing running at the sample rate selected"));
-  Serial.println(F("   's'  Stop the thing running"));
-  Serial.println(F("   't'  Initiate a temperature conversion. This should work if 'b' is pressed or not"));
-  Serial.println(F("   'i'  Query the interrupt flags register. Not really useful"));
-  Serial.println(F("   'v'  Verify the device by querying the RevID and PartID registers (hex 6 and hex 15 respectively)"));
-  Serial.println(F("   '1'  Increase red LED intensity"));
-  Serial.println(F("   '2'  Decrease red LED intensity"));
-  Serial.println(F("   '3'  Increase IR LED intensity"));
-  Serial.println(F("   '4'  Decrease IR LED intensity"));
-  Serial.println(F("   '?'  Print all registers"));
-  Serial.println(F("   'F'  Turn on filters"));
-  Serial.println(F("   'f'  Turn off filters"));
-}
+
 
 int MAX_ISR(uint32_t dummyPin) { // gotta have a dummyPin...
   MAX_interrupt = true;
