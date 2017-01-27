@@ -131,8 +131,9 @@ void MAX_packsamples(){
 
 void MAX_sendSamplesBLE(){
   char MAX_packetNumber = MAX_sampleCounter>>2; // equivalent to dividing by 4.  If we have 6 samples per packet we'd need to divide by 6.
-  MAX_radioBuffer[0] = (PKT_TYPE_MAX<<6) & MAX_packetNumber;
-//      Serial.print(MAX_packetNumber,DEC);  Serial.print('\t');
+  MAX_radioBuffer[0] = (PKT_TYPE_MAX<<6);
+  MAX_radioBuffer[0] |= MAX_packetNumber;
+  //Serial.print(MAX_packetNumber,DEC);  Serial.print('\t'); Serial.print(MAX_radioBuffer[0],HEX); Serial.print('\n');
   MAX_radioBuffer[19] = 0;
   if(MAX_packetNumber == 25){ MAX_radioBuffer[19] = tempInteger; }  // Serial.println(Celcius); }
   if(MAX_packetNumber == 26){ MAX_radioBuffer[19] = tempFraction; }
