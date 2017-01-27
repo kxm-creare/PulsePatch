@@ -38,7 +38,7 @@ void MAX_serviceInterrupts(){
 void serialPPG(){
   if (OUTPUT_TYPE != OUTPUT_PLOTTER) {
     Serial.println();  // formatting...
-    Serial.print(sampleCounter,DEC); printTab();
+    Serial.print(MAX_sampleCounter,DEC); printTab();
     Serial.print(REDvalue[packetSampleNumber]); printTab();
     Serial.print(IRvalue[packetSampleNumber]);
   } else {
@@ -55,9 +55,9 @@ void serialPPG(){
 
 //
 void readPPG(){
-  sampleCounter++;
-  if(sampleCounter > 200){ 
-    sampleCounter = 1; 
+  MAX_sampleCounter++;
+  if(MAX_sampleCounter > 200){ 
+    MAX_sampleCounter = 1; 
     MAX30102_writeRegister(MAX_TEMP_CONFIG,0x01); // start a temperature conversion
   }
   MAX_readFIFOdata();
@@ -130,11 +130,12 @@ void MAX_packsamples(){
 }
 
 void MAX_sendSamplesBLE(){
-  MAX_radioBuffer[0] = sampleCounter;
-//      Serial.print(sampleCounter,DEC);  Serial.print('\t');
+  char MAX_packetNumber = MAX_sampleCounter>>2; // equivalent to dividing by 4.  If we have 6 samples per packet we'd need to divide by 6.
+  MAX_radioBuffer[0] = (PKT_TYPE_MAX<<6) & MAX_packetNumber;
+//      Serial.print(MAX_packetNumber,DEC);  Serial.print('\t');
   MAX_radioBuffer[19] = 0;
-  if(sampleCounter == 100){ MAX_radioBuffer[19] = tempInteger; }  // Serial.println(Celcius); }
-  if(sampleCounter == 104){ MAX_radioBuffer[19] = tempFraction; }
+  if(MAX_packetNumber == 25){ MAX_radioBuffer[19] = tempInteger; }  // Serial.println(Celcius); }
+  if(MAX_packetNumber == 26){ MAX_radioBuffer[19] = tempFraction; }
 //      Serial.println();
   if (BLEconnected) {
     SimbleeBLE.send(MAX_radioBuffer, 20);
@@ -173,7 +174,7 @@ void parseChar(char command){
     case 'b':
       Serial.println("start running");
       packetSampleNumber = -1;
-      sampleCounter = 0;
+      MAX_sampleCounter = 0;
       enableMAX30102(true);
       thatTestTime = micros();
       break;
