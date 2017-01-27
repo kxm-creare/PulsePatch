@@ -95,7 +95,7 @@ void setup(){
   MAX_init(MAX_SR_200); // initialize MAX30102, specify sampleRate
   if (useFilter){ initFilter(); }
   if (OUTPUT_TYPE != OUTPUT_PLOTTER) {
-    printAllRegisters();
+    MAX_printAllRegisters();
     Serial.println();
     printHelpToSerial();
     Serial.println();
