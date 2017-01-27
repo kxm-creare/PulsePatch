@@ -31,7 +31,7 @@ char sampleCounter = 0xFF;
 int packetSampleNumber = 1;
 int REDvalue[4];
 int IRvalue[4];
-char mode = SPO2_MODE;  // SPO2_MODE or HR_MODE
+char mode = MAX_SPO2_MODE;  // MAX_SPO2_MODE or MAX_HR_MODE
 char readPointer;
 char writePointer;
 char ovfCounter;
@@ -89,7 +89,7 @@ void setup(){
   }
 
   LED_timer = millis();
-  MAX_init(SR_200); // initialize MAX30102, specify sampleRate
+  MAX_init(MAX_SR_200); // initialize MAX30102, specify sampleRate
   if (useFilter){ initFilter(); }
   if (OUTPUT_TYPE != OUTPUT_PLOTTER) {
     printAllRegisters();
