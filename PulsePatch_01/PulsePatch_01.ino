@@ -16,11 +16,13 @@
 //Set to OUTPUT_BLE to enable BLE
 const int OUTPUT_TYPE = OUTPUT_BLE;
 
+
 unsigned int LED_timer;
 int LED_delayTime = 300;
 boolean boardLEDstate = HIGH;
 int lastSwitchState;
 volatile boolean MAX_interrupt = false;
+volatile boolean ADS_interrupt = false;
 short interruptSetting;
 short interruptFlags;
 char tempInteger;
@@ -58,7 +60,8 @@ float LPfilterOutputIR[NUM_SAMPLES];
 
 // BLE STUFF
 boolean BLEconnected = false;
-char radioBuffer[20];
+char MAX_radioBuffer[20];
+char ADS_radioBuffer[20];
 
 void setup(){
 
@@ -107,13 +110,16 @@ void setup(){
 void loop(){
 
   if(MAX_interrupt){
-    serviceInterrupts(); // go see what woke us up, and do the work
+    MAX_serviceInterrupts(); // go see what MAX event woke us up, and do the work
+  }
+  if(ADS_interrupt){
+    ADS_serviceInterrupts(); // go see what ADS event woke us up, and do the work
   }
 
   blinkBoardLEDs();
   readSwitch();
 
-  eventSerial();
+  eventSerial(); // see if there's anything on the serial port; if so, process it
 }
 
 

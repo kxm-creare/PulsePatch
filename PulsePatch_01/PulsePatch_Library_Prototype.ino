@@ -1,13 +1,12 @@
 
 /***************************************************
  * 
- *  HIGH LEVEL FUNCTIONS
+ *  HIGH LEVEL MAX FUNCTIONS
  * 
  ***************************************************/
 
-
 // read interrupt flags and do the work to service them
-void serviceInterrupts(){
+void MAX_serviceInterrupts(){
     MAX_interrupt = false;  // reset this software flag
     interruptFlags = MAX_readInterrupts();  // read interrupt registers
 //    Serial.println(interruptFlags,HEX);
@@ -35,7 +34,6 @@ void serviceInterrupts(){
     }
 }
 
-
 // send PPG value(s) via Serial port
 void serialPPG(){
   if (OUTPUT_TYPE != OUTPUT_PLOTTER) {
@@ -55,21 +53,18 @@ void serialPPG(){
   }
 }
 
-void printSpace(){
-   Serial.print(" ");
-}
-
-
+//
 void readPPG(){
   sampleCounter++;
   if(sampleCounter > 200){ 
     sampleCounter = 1; 
     MAX30102_writeRegister(MAX_TEMP_CONFIG,0x01); // start a temperature conversion
   }
-  readFIFOdata();
+  MAX_readFIFOdata();
 }
 
-void readFIFOdata(){  // read in the FIFO data three bytes per ADC result
+// read in the FIFO data three bytes per ADC result
+void MAX_readFIFOdata(){
   char dataByte[6];
   int byteCounter = 0;
   packetSampleNumber++;
@@ -100,50 +95,60 @@ void readFIFOdata(){  // read in the FIFO data three bytes per ADC result
   }
 
     if(OUTPUT_TYPE == OUTPUT_BLE && packetSampleNumber == 3){
-      packSamples();
-      sendSamplesBLE();
+      MAX_packsamples();
+      MAX_sendSamplesBLE();
     }
 }
 
-void packSamples(){
+// Pack samples into a buffer for transmission via BLE
+void MAX_packsamples(){
 
-        radioBuffer[1] = ((REDvalue[0] &  0x0003FC00) >> 10);
-        radioBuffer[2] = ((REDvalue[0] &  0x000003FC) >> 2);
-        radioBuffer[3] = ((REDvalue[0] &  0x00000003) << 6);
-        radioBuffer[3] |= ((IRvalue[0] & 0x0003F000) >> 12);
-        radioBuffer[4] = ((IRvalue[0] &  0x00000FF0) >> 4);
-        radioBuffer[5] = ((IRvalue[0] &  0x0000000F) << 4);
-        radioBuffer[5] |= ((REDvalue[1] & 0x0003C000) >> 14);
-        radioBuffer[6] = ((REDvalue[1] &  0x00003FC0) >> 6);
-        radioBuffer[7] = ((REDvalue[1] &  0x0000003F) << 2);
-        radioBuffer[7] |= ((IRvalue[1] & 0x00030000) >> 16);
-        radioBuffer[8] = ((IRvalue[1] &  0x0000FF00) >> 8);
-        radioBuffer[9] = (IRvalue[1] &   0x000000FF);
-        radioBuffer[10] = ((REDvalue[2] &   0x0003FC00) >> 10);
-        radioBuffer[11] = ((REDvalue[2] &  0x000003FC) >> 2);
-        radioBuffer[12] = ((REDvalue[2] &  0x00000003) << 6);
-        radioBuffer[12] |= ((IRvalue[2] & 0x0003F000) >> 12);
-        radioBuffer[13] = ((IRvalue[2] &  0x00000FF0) >> 4);
-        radioBuffer[14] = ((IRvalue[2] &  0x0000000F) << 4);
-        radioBuffer[14] |= ((REDvalue[3] & 0x0003C000) >> 14);
-        radioBuffer[15] = ((REDvalue[3] &  0x00003FC0) >> 6);
-        radioBuffer[16] = ((REDvalue[3] &  0x0000003F) << 2);
-        radioBuffer[16] |= ((IRvalue[3] & 0x00030000) >> 16);
-        radioBuffer[17] = ((IRvalue[3] &  0x0000FF00) >> 8);
-        radioBuffer[18] = (IRvalue[3] &   0x000000FF);
+  MAX_radioBuffer[1] = ((REDvalue[0] &  0x0003FC00) >> 10);
+  MAX_radioBuffer[2] = ((REDvalue[0] &  0x000003FC) >> 2);
+  MAX_radioBuffer[3] = ((REDvalue[0] &  0x00000003) << 6);
+  MAX_radioBuffer[3] |= ((IRvalue[0] & 0x0003F000) >> 12);
+  MAX_radioBuffer[4] = ((IRvalue[0] &  0x00000FF0) >> 4);
+  MAX_radioBuffer[5] = ((IRvalue[0] &  0x0000000F) << 4);
+  MAX_radioBuffer[5] |= ((REDvalue[1] & 0x0003C000) >> 14);
+  MAX_radioBuffer[6] = ((REDvalue[1] &  0x00003FC0) >> 6);
+  MAX_radioBuffer[7] = ((REDvalue[1] &  0x0000003F) << 2);
+  MAX_radioBuffer[7] |= ((IRvalue[1] & 0x00030000) >> 16);
+  MAX_radioBuffer[8] = ((IRvalue[1] &  0x0000FF00) >> 8);
+  MAX_radioBuffer[9] = (IRvalue[1] &   0x000000FF);
+  MAX_radioBuffer[10] = ((REDvalue[2] &   0x0003FC00) >> 10);
+  MAX_radioBuffer[11] = ((REDvalue[2] &  0x000003FC) >> 2);
+  MAX_radioBuffer[12] = ((REDvalue[2] &  0x00000003) << 6);
+  MAX_radioBuffer[12] |= ((IRvalue[2] & 0x0003F000) >> 12);
+  MAX_radioBuffer[13] = ((IRvalue[2] &  0x00000FF0) >> 4);
+  MAX_radioBuffer[14] = ((IRvalue[2] &  0x0000000F) << 4);
+  MAX_radioBuffer[14] |= ((REDvalue[3] & 0x0003C000) >> 14);
+  MAX_radioBuffer[15] = ((REDvalue[3] &  0x00003FC0) >> 6);
+  MAX_radioBuffer[16] = ((REDvalue[3] &  0x0000003F) << 2);
+  MAX_radioBuffer[16] |= ((IRvalue[3] & 0x00030000) >> 16);
+  MAX_radioBuffer[17] = ((IRvalue[3] &  0x0000FF00) >> 8);
+  MAX_radioBuffer[18] = (IRvalue[3] &   0x000000FF);
 }
 
-void sendSamplesBLE(){
-      radioBuffer[0] = sampleCounter;
+void MAX_sendSamplesBLE(){
+  MAX_radioBuffer[0] = sampleCounter;
 //      Serial.print(sampleCounter,DEC);  Serial.print('\t');
-      radioBuffer[19] = 0;
-      if(sampleCounter == 100){ radioBuffer[19] = tempInteger; }  // Serial.println(Celcius); }
-      if(sampleCounter == 104){ radioBuffer[19] = tempFraction; }
+  MAX_radioBuffer[19] = 0;
+  if(sampleCounter == 100){ MAX_radioBuffer[19] = tempInteger; }  // Serial.println(Celcius); }
+  if(sampleCounter == 104){ MAX_radioBuffer[19] = tempFraction; }
 //      Serial.println();
-      if (BLEconnected) {
-        SimbleeBLE.send(radioBuffer, 20);
-      }
-      
+  if (BLEconnected) {
+    SimbleeBLE.send(MAX_radioBuffer, 20);
+  }
+}
+
+/***************************************************
+ * 
+ *  HIGH LEVEL ADS FUNCTIONS
+ * 
+ ***************************************************/
+
+// read interrupt flags and do the work to service them
+void ADS_serviceInterrupts(){
 }
 
 /***************************************************
@@ -159,69 +164,67 @@ void eventSerial(){
   }
 }
 
-
 void parseChar(char command){  
   uint16_t intSource;  
-    switch(command){
-      case 'h':
-        printHelpToSerial();
-        break;
-      case 'b':
-        Serial.println("start running");
-        packetSampleNumber = -1;
-        sampleCounter = 0;
-        enableMAX30102(true);
-        thatTestTime = micros();
-        break;
-      case 's':
-        Serial.println("stop running");
-        enableMAX30102(false);
-        break;
-      case 't':
-        MAX30102_writeRegister(MAX_TEMP_CONFIG,0x01);
-        break;
-      case 'i':
-        intSource = MAX30102_readShort(MAX_STATUS_1);
-        Serial.print("intSource: 0x"); Serial.println(intSource,HEX);
-        break;
-      case 'v':
-        getDeviceInfo();
-        break;
-      case '?':
-        printAllRegisters();
-        break;
+  switch(command){
+    case 'h':
+      printHelpToSerial();
+      break;
+    case 'b':
+      Serial.println("start running");
+      packetSampleNumber = -1;
+      sampleCounter = 0;
+      enableMAX30102(true);
+      thatTestTime = micros();
+      break;
+    case 's':
+      Serial.println("stop running");
+      enableMAX30102(false);
+      break;
+    case 't':
+      MAX30102_writeRegister(MAX_TEMP_CONFIG,0x01);
+      break;
+    case 'i':
+      intSource = MAX30102_readShort(MAX_STATUS_1);
+      Serial.print("intSource: 0x"); Serial.println(intSource,HEX);
+      break;
+    case 'v':
+      MAX_getDeviceInfo();
+      break;
+    case '?':
+      MAX_printAllRegisters();
+      break;
 
-      case 'f':
-        useFilter = false;
-        break;
-      case 'F':
-        useFilter = true;
-        break;
-      case '1':
-        rAmp++; if(rAmp > 50){rAmp = 50;}
-        setLEDamplitude(rAmp, irAmp);
-        serialAmps();
-        break;
-      case '2':
-        rAmp--; if(rAmp < 1){rAmp = 0;}
-        setLEDamplitude(rAmp, irAmp);
-        serialAmps();
-        break;
-      case '3':
-        irAmp++; if(irAmp > 50){irAmp = 50;}
-        setLEDamplitude(rAmp, irAmp);
-        serialAmps();
-        break;
-      case '4':
-        irAmp--; if(irAmp < 1){irAmp = 0;}
-        setLEDamplitude(rAmp, irAmp);
-        serialAmps();
-        break;
-      default:
-        break;
-    }
+    case 'f':
+      useFilter = false;
+      break;
+    case 'F':
+      useFilter = true;
+      break;
+    case '1':
+      rAmp++; if(rAmp > 50){rAmp = 50;}
+      setLEDamplitude(rAmp, irAmp);
+      serialAmps();
+      break;
+    case '2':
+      rAmp--; if(rAmp < 1){rAmp = 0;}
+      setLEDamplitude(rAmp, irAmp);
+      serialAmps();
+      break;
+    case '3':
+      irAmp++; if(irAmp > 50){irAmp = 50;}
+      setLEDamplitude(rAmp, irAmp);
+      serialAmps();
+      break;
+    case '4':
+      irAmp--; if(irAmp < 1){irAmp = 0;}
+      setLEDamplitude(rAmp, irAmp);
+      serialAmps();
+      break;
+    default:
+      break;
   }
-
+}
 
 void printHelpToSerial() {
   Serial.println(F("Commands:"));
@@ -240,38 +243,42 @@ void printHelpToSerial() {
   Serial.println(F("   'f'  Turn off filters"));
 }
 
+// Print tab to serial port
+void printTab(){
+  Serial.print("\t");
+}
+
+// Print space to serial port
+void printSpace(){
+   Serial.print(" ");
+}
+
 /***************************************************
  * 
  *  SIMBLEE FUNCTIONS
  * 
  ***************************************************/
 
-void SimbleeBLE_onConnect()
-    {
-      Serial.println("Connected");
-      BLEconnected = true;
-      digitalWrite(GRN_LED,HIGH);
-      boardLEDstate = false;
-      digitalWrite(RED_LED,boardLEDstate);
-    }
+void SimbleeBLE_onConnect() {
+  Serial.println("Connected");
+  BLEconnected = true;
+  digitalWrite(GRN_LED,HIGH);
+  boardLEDstate = false;
+  digitalWrite(RED_LED,boardLEDstate);
+}
 
+void SimbleeBLE_onDisconnect() {
+  Serial.println("Connection Lost...");
+  BLEconnected = false;
+  enableMAX30102(false);
+  digitalWrite(GRN_LED,LOW);
+  LED_timer = millis();
+}
 
-
-    void SimbleeBLE_onDisconnect()
-    {
-      Serial.println("Connection Lost...");
-      BLEconnected = false;
-      enableMAX30102(false);
-      digitalWrite(GRN_LED,LOW);
-      LED_timer = millis();
-
-    }
-
-    void SimbleeBLE_onReceive(char *data, int len)
-    {
-      byte inChar = data[0];
-      parseChar(inChar);
-    }
+void SimbleeBLE_onReceive(char *data, int len) {
+  byte inChar = data[0];
+  parseChar(inChar);
+}
 
 
 /***************************************************
@@ -307,12 +314,12 @@ void MAX_init(char sr){
 
 void enableMAX30102(boolean activate){
   char setting = mode;
-  zeroFIFOpointers();
+  MAX_zeroFIFOpointers();
   if(!activate){ setting |= 0x80; }
   MAX30102_writeRegister(MAX_MODE_CONFIG,setting);
 }
 
-void zeroFIFOpointers(){
+void MAX_zeroFIFOpointers(){
   MAX30102_writeRegister(MAX_FIFO_WRITE,0x00);
   MAX30102_writeRegister(MAX_OVF_COUNTER,0x00);
   MAX30102_writeRegister(MAX_FIFO_READ,0x00);
@@ -328,7 +335,7 @@ void readPointers(){
 }
 
 // report RevID and PartID for verification
-void getDeviceInfo(){
+void MAX_getDeviceInfo(){
   char revID = MAX30102_readRegister(MAX_REV_ID);
   char partID = MAX30102_readRegister(MAX_PART_ID);
   Serial.print("Rev ID: 0x"); Serial.print(revID,HEX);
@@ -345,15 +352,12 @@ void readTemp(){
   Fahrenheit = Celcius*1.8 + 32;
 }
 
-
-
 void printTemp(){
   if (OUTPUT_TYPE != OUTPUT_PLOTTER) {
     printTab(); // formatting...
     Serial.print(Celcius,3); Serial.print("*C");
   }
 }
-
 
 // set the current amplitude for the LEDs
 // currently uses the same setting for both RED and IR
@@ -372,7 +376,7 @@ void setLEDamplitude(int Ir, int Iir){
 }
 
 // measures time between samples for verificaion purposes
-void sampleTimeTest(){
+void MAX_sampleTimeTest(){
   thisTestTime = micros();
   Serial.print("S\t"); Serial.println(thisTestTime - thatTestTime);
   thatTestTime = thisTestTime;
@@ -388,8 +392,6 @@ void MAX_setInterrupts(uint16_t setting){
   Wire.write(lowSetting);
   Wire.endTransmission(true);
 }
-
-
 
 // reads the interrupt status registers
 // returns a 16 bit value
@@ -437,7 +439,7 @@ short MAX30102_readShort(char startReg){
 }
 
 // prints out register values
-void printAllRegisters(){
+void MAX_printAllRegisters(){
   Wire.beginTransmission(MAX_ADD);
   Wire.write(MAX_STATUS_1);
   Wire.endTransmission(false);
@@ -481,8 +483,6 @@ void readWireAndPrintHex(char startReg){
     Serial.print("0x"); Serial.println(inChar,HEX);
   }
 }
-
-
 
 // helps with verbose feedback
 void printRegName(char regToPrint){
@@ -537,7 +537,9 @@ void printRegName(char regToPrint){
   }
 }
 
-// formatting...
-void printTab(){
-  Serial.print("\t");
-}
+/***************************************************
+ * 
+ *  ADS1292 FUNCTIONS
+ * 
+ ***************************************************/
+
