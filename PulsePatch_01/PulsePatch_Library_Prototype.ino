@@ -39,15 +39,15 @@ void serialPPG(){
   if (OUTPUT_TYPE != OUTPUT_PLOTTER) {
     Serial.println();  // formatting...
     Serial.print(MAX_sampleCounter,DEC); printTab();
-    Serial.print(REDvalue[packetSampleNumber]); printTab();
-    Serial.print(IRvalue[packetSampleNumber]);
+    Serial.print(REDvalue[MAX_packetSampleNumber]); printTab();
+    Serial.print(IRvalue[MAX_packetSampleNumber]);
   } else {
     if(useFilter){
       Serial.print(HPfilterOutputRED[NUM_SAMPLES-1]); printSpace();
       Serial.print(HPfilterOutputIR[NUM_SAMPLES-1]);
     } else {
-      Serial.print(REDvalue[packetSampleNumber]); printSpace();
-      Serial.print(IRvalue[packetSampleNumber]);
+      Serial.print(REDvalue[MAX_packetSampleNumber]); printSpace();
+      Serial.print(IRvalue[MAX_packetSampleNumber]);
     }
     Serial.println();
   }
@@ -67,9 +67,9 @@ void readPPG(){
 void MAX_readFIFOdata(){
   char dataByte[6];
   int byteCounter = 0;
-  packetSampleNumber++;
-  if(packetSampleNumber == 4){
-    packetSampleNumber = 0;
+  MAX_packetSampleNumber++;
+  if(MAX_packetSampleNumber == 4){
+    MAX_packetSampleNumber = 0;
   }
   Wire.beginTransmission(MAX_ADD);
   Wire.write(MAX_FIFO_DATA);
@@ -79,22 +79,22 @@ void MAX_readFIFOdata(){
     dataByte[byteCounter] = Wire.read();
     byteCounter++;
   }
-  REDvalue[packetSampleNumber] = 0; IRvalue[packetSampleNumber] = 0;
+  REDvalue[MAX_packetSampleNumber] = 0; IRvalue[MAX_packetSampleNumber] = 0;
 
-  REDvalue[packetSampleNumber] = (dataByte[0] & 0xFF); REDvalue[packetSampleNumber] <<= 8;
-  REDvalue[packetSampleNumber] |= dataByte[1]; REDvalue[packetSampleNumber] <<= 8;
-  REDvalue[packetSampleNumber] |= dataByte[2];
-  IRvalue[packetSampleNumber] = (dataByte[3] & 0xFF); IRvalue[packetSampleNumber] <<= 8;
-  IRvalue[packetSampleNumber] |= dataByte[4]; IRvalue[packetSampleNumber] <<= 8;
-  IRvalue[packetSampleNumber] |= dataByte[5];
-  REDvalue[packetSampleNumber] &= 0x0003FFFF;
-  IRvalue[packetSampleNumber] &= 0x0003FFFF;
+  REDvalue[MAX_packetSampleNumber] = (dataByte[0] & 0xFF); REDvalue[MAX_packetSampleNumber] <<= 8;
+  REDvalue[MAX_packetSampleNumber] |= dataByte[1]; REDvalue[MAX_packetSampleNumber] <<= 8;
+  REDvalue[MAX_packetSampleNumber] |= dataByte[2];
+  IRvalue[MAX_packetSampleNumber] = (dataByte[3] & 0xFF); IRvalue[MAX_packetSampleNumber] <<= 8;
+  IRvalue[MAX_packetSampleNumber] |= dataByte[4]; IRvalue[MAX_packetSampleNumber] <<= 8;
+  IRvalue[MAX_packetSampleNumber] |= dataByte[5];
+  REDvalue[MAX_packetSampleNumber] &= 0x0003FFFF;
+  IRvalue[MAX_packetSampleNumber] &= 0x0003FFFF;
 
   if(useFilter){
-    filterHP(REDvalue[packetSampleNumber], IRvalue[packetSampleNumber]);
+    filterHP(REDvalue[MAX_packetSampleNumber], IRvalue[MAX_packetSampleNumber]);
   }
 
-    if(OUTPUT_TYPE == OUTPUT_BLE && packetSampleNumber == 3){
+    if(OUTPUT_TYPE == OUTPUT_BLE && MAX_packetSampleNumber == 3){
       MAX_packsamples();
       MAX_sendSamplesBLE();
     }
@@ -137,7 +137,6 @@ void MAX_sendSamplesBLE(){
   MAX_radioBuffer[19] = 0;
   if(MAX_packetNumber == 25){ MAX_radioBuffer[19] = tempInteger; }  // Serial.println(Celcius); }
   if(MAX_packetNumber == 26){ MAX_radioBuffer[19] = tempFraction; }
-//      Serial.println();
   if (BLEconnected) {
     SimbleeBLE.send(MAX_radioBuffer, 20);
   }
@@ -151,7 +150,102 @@ void MAX_sendSamplesBLE(){
 
 // read interrupt flags and do the work to service them
 void ADS_serviceInterrupts(){
+  ADS_interrupt = false;
+  readECG();
 }
+
+
+void readECG() {
+  ADS_readFIFOdata();
+}
+
+
+// read in the FIFO data three bytes per ADC result
+void ADS_readFIFOdata(){
+  char dataByte[] = {0x00, 0x00, 0x00, 0x00, 0x00, 0x00}; 
+  int byteCounter = 0;
+  ADS_packetSampleNumber++;
+  if(ADS_packetSampleNumber == 6){
+    ADS_packetSampleNumber = 0;
+  }
+
+  // Look at my awesomely fake data for channel 1!
+  switch (ADS_packetSampleNumber) {
+    case 0:
+      // zero is fine
+      break;
+    case 1:
+      dataByte[1] = 0xFF; 
+      break;
+    case 2:
+      dataByte[0] = 0x07; 
+      break;
+    case 3:
+      dataByte[0] = 0x70; 
+      break;
+    case 4:
+      dataByte[0] = 0xF7; 
+      break;
+    case 5:
+      dataByte[0] = 0xF0; 
+      break;
+  }
+
+  ECGvalue[ADS_packetSampleNumber] = 0;
+  ECGvalue[ADS_packetSampleNumber] = (dataByte[0] & 0xFF); ECGvalue[ADS_packetSampleNumber] <<= 8;
+  ECGvalue[ADS_packetSampleNumber] |= dataByte[1]; ECGvalue[ADS_packetSampleNumber] <<= 8;
+  ECGvalue[ADS_packetSampleNumber] |= dataByte[2];
+
+  ECGvalue[ADS_packetSampleNumber] &= 0x00FFFFFF;
+
+  if(OUTPUT_TYPE == OUTPUT_BLE && ADS_packetSampleNumber == 5){
+    ADS_packsamples();
+    ADS_sendSamplesBLE();
+  }
+}
+
+// Pack samples into a buffer for transmission via BLE
+void ADS_packsamples(){
+
+  ADS_radioBuffer[1]  = ((ECGvalue[0] &  0x00FF0000) >> 16);
+  ADS_radioBuffer[2]  = ((ECGvalue[0] &  0x0000FF00) >> 8);
+  ADS_radioBuffer[3]  =  (ECGvalue[0] &  0x000000FF);
+  ADS_radioBuffer[4]  = ((ECGvalue[1] &  0x00FF0000) >> 16);
+  ADS_radioBuffer[5]  = ((ECGvalue[1] &  0x0000FF00) >> 8);
+  ADS_radioBuffer[6]  =  (ECGvalue[1] &  0x000000FF);
+  ADS_radioBuffer[7]  = ((ECGvalue[2] &  0x00FF0000) >> 16);
+  ADS_radioBuffer[8]  = ((ECGvalue[2] &  0x0000FF00) >> 8);
+  ADS_radioBuffer[9]  =  (ECGvalue[2] &  0x000000FF);
+  ADS_radioBuffer[10] = ((ECGvalue[3] &  0x00FF0000) >> 16);
+  ADS_radioBuffer[11] = ((ECGvalue[3] &  0x0000FF00) >> 8);
+  ADS_radioBuffer[12] =  (ECGvalue[3] &  0x000000FF);
+  ADS_radioBuffer[13] = ((ECGvalue[4] &  0x00FF0000) >> 16);
+  ADS_radioBuffer[14] = ((ECGvalue[4] &  0x0000FF00) >> 8);
+  ADS_radioBuffer[15] =  (ECGvalue[4] &  0x000000FF);
+  ADS_radioBuffer[16] = ((ECGvalue[5] &  0x00FF0000) >> 16);
+  ADS_radioBuffer[17] = ((ECGvalue[5] &  0x0000FF00) >> 8);
+  ADS_radioBuffer[18] =  (ECGvalue[5] &  0x000000FF);
+}
+
+void ADS_sendSamplesBLE(){
+  ADS_packetNumber++;
+  if (ADS_packetNumber == 64) {
+    ADS_packetNumber = 0;
+  }
+
+  ADS_radioBuffer[0] = (PKT_TYPE_ADS<<6);
+  ADS_radioBuffer[0] |= ADS_packetNumber;
+  //Serial.print(MAX_packetNumber,DEC);  Serial.print('\t'); Serial.print(MAX_radioBuffer[0],HEX); Serial.print('\n');
+  ADS_radioBuffer[19] = 0;
+  if(ADS_packetNumber == 25){ ADS_radioBuffer[19] = 0x22; }  // arbitrary thing I'm putting in here
+  if(ADS_packetNumber == 26){ ADS_radioBuffer[19] = 0x99; }  // another arbitrary thing.
+//      Serial.println();
+  if (BLEconnected) {
+    SimbleeBLE.send(ADS_radioBuffer, 20);
+  }
+}
+
+
 
 /***************************************************
  * 
@@ -174,7 +268,7 @@ void parseChar(char command){
       break;
     case 'b':
       Serial.println("start running");
-      packetSampleNumber = -1;
+      MAX_packetSampleNumber = -1;
       MAX_sampleCounter = 0;
       enableMAX30102(true);
       thatTestTime = micros();

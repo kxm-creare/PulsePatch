@@ -16,13 +16,14 @@
 //Set to OUTPUT_BLE to enable BLE
 const int OUTPUT_TYPE = OUTPUT_BLE;
 
-
+// LED/Board Functions
 unsigned int LED_timer;
 int LED_delayTime = 300;
 boolean boardLEDstate = HIGH;
 int lastSwitchState;
+
+// MAX VARIABLES:
 volatile boolean MAX_interrupt = false;
-volatile boolean ADS_interrupt = false;
 short interruptSetting;
 short interruptFlags;
 char tempInteger;
@@ -30,7 +31,7 @@ char tempFraction;
 float Celcius;
 float Fahrenheit;
 char MAX_sampleCounter = 0xFF;
-int packetSampleNumber = 1;
+int MAX_packetSampleNumber = 1;
 int REDvalue[4];
 int IRvalue[4];
 char mode = MAX_SPO2_MODE;  // MAX_SPO2_MODE or MAX_HR_MODE
@@ -40,12 +41,22 @@ char ovfCounter;
 int rAmp = 10;
 int irAmp = 10;
 
+// ADS VARIABLES:
+volatile boolean ADS_interrupt = false;
+int ADS_packetSampleNumber = 0;
+char ADS_packetNumber; 
+long ECGvalue[6]; // using longs to make sure we can hold at least 24 bits.
+
 
 //  TESTING
 unsigned int thisTestTime;
 unsigned int thatTestTime;
 
-// FILTER STUFF
+// FAKING THE ADS INTERRUPT LOOP
+unsigned int ADS_timer = 0;
+int ADS_delayTime = 20;
+
+// MAX FILTER STUFF
 char sampleRate;
 boolean useFilter = false;
 int gain = 10;
@@ -104,6 +115,8 @@ void setup(){
     enableMAX30102(true);
     thatTestTime = micros();
   }
+ADS_timer = millis();
+
 }
 
 
@@ -119,10 +132,19 @@ void loop(){
   blinkBoardLEDs();
   readSwitch();
 
+  fakeADSinterrupt(); // fake the ADS interrupting at 500 Hz.
+
   eventSerial(); // see if there's anything on the serial port; if so, process it
 }
 
 
+// Fake the ADS interrupt, for now
+void fakeADSinterrupt() {
+  if(millis()-ADS_timer > ADS_delayTime) {
+    ADS_timer = ADS_timer + ADS_delayTime; // make sure we stay at targeted interrupt rate
+    ADS_interrupt = true;
+  }
+}
 
 // RED_LED blinks when not connected to BLE
 // GRN_LED steady on when BLE connected
