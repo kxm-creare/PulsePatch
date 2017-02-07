@@ -162,7 +162,7 @@ void readECG() {
 
 // read in the FIFO data three bytes per ADC result
 void ADS_readFIFOdata(){
-  char dataByte[] = {0x00, 0x00, 0x00, 0x00, 0x00, 0x00}; 
+  char dataByte[] = {0x00, 0x00, 0x00}; 
   int byteCounter = 0;
   ADS_packetSampleNumber++;
   if(ADS_packetSampleNumber == 6){
@@ -175,19 +175,19 @@ void ADS_readFIFOdata(){
       // zero is fine
       break;
     case 1:
-      dataByte[1] = 0xFF; 
+      dataByte[1] = 0xFF; // 0x00FF00 = 65,280
       break;
     case 2:
-      dataByte[0] = 0x07; 
+      dataByte[0] = 0x07; // 0x070000 = 458,752
       break;
     case 3:
-      dataByte[0] = 0x70; 
+      dataByte[0] = 0x70; // 0x700000 = 7,340,032
       break;
     case 4:
-      dataByte[0] = 0xF7; 
+      dataByte[0] = 0xF7; // 0xF70000 = 16,187,392
       break;
     case 5:
-      dataByte[0] = 0xF0; 
+      dataByte[0] = 0xF0; // 0xF00000 = 15,728,640
       break;
   }
 
