@@ -54,7 +54,7 @@ unsigned int thatTestTime;
 
 // FAKING THE ADS INTERRUPT LOOP
 unsigned int ADS_timer = 0;
-int ADS_delayTime = 20;
+int ADS_delayTime = 2; // 500 SPS
 
 // MAX FILTER STUFF
 char sampleRate;
