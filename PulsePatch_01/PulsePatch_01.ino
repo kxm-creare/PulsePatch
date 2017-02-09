@@ -16,10 +16,13 @@
 //Set to OUTPUT_BLE to enable BLE
 const int OUTPUT_TYPE = OUTPUT_BLE;
 
+// LED/Board Functions
 unsigned int LED_timer;
 int LED_delayTime = 300;
 boolean boardLEDstate = HIGH;
 int lastSwitchState;
+
+// MAX VARIABLES:
 volatile boolean MAX_interrupt = false;
 short interruptSetting;
 short interruptFlags;
@@ -27,23 +30,33 @@ char tempInteger;
 char tempFraction;
 float Celcius;
 float Fahrenheit;
-char sampleCounter = 0xFF;
-int packetSampleNumber = 1;
+char MAX_sampleCounter = 0xFF;
+int MAX_packetSampleNumber = 1;
 int REDvalue[4];
 int IRvalue[4];
-char mode = SPO2_MODE;  // SPO2_MODE or HR_MODE
+char mode = MAX_SPO2_MODE;  // MAX_SPO2_MODE or MAX_HR_MODE
 char readPointer;
 char writePointer;
 char ovfCounter;
 int rAmp = 10;
 int irAmp = 10;
 
+// ADS VARIABLES:
+volatile boolean ADS_interrupt = false;
+int ADS_packetSampleNumber = 0;
+char ADS_packetNumber; 
+long ECGvalue[6]; // using longs to make sure we can hold at least 24 bits.
+
 
 //  TESTING
 unsigned int thisTestTime;
 unsigned int thatTestTime;
 
-// FILTER STUFF
+// FAKING THE ADS INTERRUPT LOOP
+unsigned int ADS_timer = 0;
+int ADS_delayTime = 2; // 500 SPS
+
+// MAX FILTER STUFF
 char sampleRate;
 boolean useFilter = false;
 int gain = 10;
@@ -58,7 +71,8 @@ float LPfilterOutputIR[NUM_SAMPLES];
 
 // BLE STUFF
 boolean BLEconnected = false;
-char radioBuffer[20];
+char MAX_radioBuffer[20];
+char ADS_radioBuffer[20];
 
 void setup(){
 
@@ -89,10 +103,10 @@ void setup(){
   }
 
   LED_timer = millis();
-  MAX_init(SR_200); // initialize MAX30102, specify sampleRate
+  MAX_init(MAX_SR_200); // initialize MAX30102, specify sampleRate
   if (useFilter){ initFilter(); }
   if (OUTPUT_TYPE != OUTPUT_PLOTTER) {
-    printAllRegisters();
+    MAX_printAllRegisters();
     Serial.println();
     printHelpToSerial();
     Serial.println();
@@ -101,22 +115,36 @@ void setup(){
     enableMAX30102(true);
     thatTestTime = micros();
   }
+ADS_timer = millis();
+
 }
 
 
 void loop(){
 
   if(MAX_interrupt){
-    serviceInterrupts(); // go see what woke us up, and do the work
+    MAX_serviceInterrupts(); // go see what MAX event woke us up, and do the work
+  }
+  if(ADS_interrupt){
+    ADS_serviceInterrupts(); // go see what ADS event woke us up, and do the work
   }
 
   blinkBoardLEDs();
   readSwitch();
 
-  eventSerial();
+  fakeADSinterrupt(); // fake the ADS interrupting at 500 Hz.
+
+  eventSerial(); // see if there's anything on the serial port; if so, process it
 }
 
 
+// Fake the ADS interrupt, for now
+void fakeADSinterrupt() {
+  if(millis()-ADS_timer > ADS_delayTime) {
+    ADS_timer = ADS_timer + ADS_delayTime; // make sure we stay at targeted interrupt rate
+    ADS_interrupt = true;
+  }
+}
 
 // RED_LED blinks when not connected to BLE
 // GRN_LED steady on when BLE connected
