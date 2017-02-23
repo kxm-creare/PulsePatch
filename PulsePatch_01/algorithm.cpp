@@ -79,12 +79,39 @@ void maxim_heart_rate_and_oxygen_saturation(uint32_t *pun_ir_buffer,  int32_t n_
 * \retval       None
 */
 {
+    int32_t n_exact_ir_valley_locs_count;
+    int32_t an_exact_ir_valley_locs[15];
+    maxim_heart_rate_and_oxygen_saturation_details(pun_ir_buffer, n_ir_buffer_length, pun_red_buffer, pn_spo2, pch_spo2_valid, pn_heart_rate, pch_hr_valid, an_exact_ir_valley_locs, &n_exact_ir_valley_locs_count);
+}
+
+
+
+void maxim_heart_rate_and_oxygen_saturation_details(uint32_t *pun_ir_buffer,  int32_t n_ir_buffer_length, uint32_t *pun_red_buffer, int32_t *pn_spo2, int8_t *pch_spo2_valid, 
+                              int32_t *pn_heart_rate, int8_t  *pch_hr_valid, int32_t *pn_exact_ir_valley_locs, int32_t *pn_exact_ir_valley_locs_count)
+/**
+* \brief        Calculate the heart rate and SpO2 level; also return peak locations
+* \par          Details
+*               By detecting  peaks of PPG cycle and corresponding AC/DC of red/infra-red signal, the ratio for the SPO2 is computed.
+*               Since this algorithm is aiming for Arm M0/M3. formaula for SPO2 did not achieve the accuracy due to register overflow.
+*               Thus, accurate SPO2 is precalculated and save longo uch_spo2_table[] per each ratio.
+*
+* \param[in]    *pun_ir_buffer           - IR sensor data buffer
+* \param[in]    n_ir_buffer_length      - IR sensor data buffer length
+* \param[in]    *pun_red_buffer          - Red sensor data buffer
+* \param[out]    *pn_spo2                - Calculated SpO2 value
+* \param[out]    *pch_spo2_valid         - 1 if the calculated SpO2 value is valid
+* \param[out]    *pn_heart_rate          - Calculated heart rate value
+* \param[out]    *pch_hr_valid           - 1 if the calculated heart rate value is valid
+*
+* \retval       None
+*/
+{
     uint32_t un_ir_mean ,un_only_once ;
     int32_t k ,n_i_ratio_count;
     int32_t i, s, m, n_exact_ir_valley_locs_count ,n_middle_idx;
     int32_t n_th1, n_npks,n_c_min;      
     int32_t an_ir_valley_locs[15] ;
-    int32_t an_exact_ir_valley_locs[15] ;
+//    int32_t pn_exact_ir_valley_locs[15] ;
     int32_t an_dx_peak_locs[15] ;
     int32_t n_peak_interval_sum;
     
@@ -173,7 +200,7 @@ void maxim_heart_rate_and_oxygen_saturation(uint32_t *pun_ir_buffer,  int32_t n_
                        un_only_once =0;
                    } 
                    n_c_min= an_x[i] ;
-                   an_exact_ir_valley_locs[k]=i;
+                   pn_exact_ir_valley_locs[k]=i;
                 }
             if (un_only_once ==0)
                 n_exact_ir_valley_locs_count ++ ;
@@ -190,14 +217,14 @@ void maxim_heart_rate_and_oxygen_saturation(uint32_t *pun_ir_buffer,  int32_t n_
         an_y[k]=( an_y[k]+an_y[k+1]+ an_y[k+2]+ an_y[k+3])/(int32_t)4;
     }
 
-    //using an_exact_ir_valley_locs , find ir-red DC andir-red AC for SPO2 calibration ratio
+    //using pn_exact_ir_valley_locs , find ir-red DC andir-red AC for SPO2 calibration ratio
     //finding AC/DC maximum of raw ir * red between two valley locations
     n_ratio_average =0; 
     n_i_ratio_count =0; 
     
     for(k=0; k< 5; k++) an_ratio[k]=0;
     for (k=0; k< n_exact_ir_valley_locs_count; k++){
-        if (an_exact_ir_valley_locs[k] > BUFFER_SIZE ){             
+        if (pn_exact_ir_valley_locs[k] > BUFFER_SIZE ){             
             *pn_spo2 =  -999 ; // do not use SPO2 since valley loc is out of range
             *pch_spo2_valid  = 0; 
             return;
@@ -209,18 +236,18 @@ void maxim_heart_rate_and_oxygen_saturation(uint32_t *pun_ir_buffer,  int32_t n_
     for (k=0; k< n_exact_ir_valley_locs_count-1; k++){
         n_y_dc_max= -16777216 ; 
         n_x_dc_max= - 16777216; 
-        if (an_exact_ir_valley_locs[k+1]-an_exact_ir_valley_locs[k] >10){
-            for (i=an_exact_ir_valley_locs[k]; i< an_exact_ir_valley_locs[k+1]; i++){
+        if (pn_exact_ir_valley_locs[k+1]-pn_exact_ir_valley_locs[k] >10){
+            for (i=pn_exact_ir_valley_locs[k]; i< pn_exact_ir_valley_locs[k+1]; i++){
                 if (an_x[i]> n_x_dc_max) {n_x_dc_max =an_x[i];n_x_dc_max_idx =i; }
                 if (an_y[i]> n_y_dc_max) {n_y_dc_max =an_y[i];n_y_dc_max_idx=i;}
             }
-            n_y_ac= (an_y[an_exact_ir_valley_locs[k+1]] - an_y[an_exact_ir_valley_locs[k] ] )*(n_y_dc_max_idx -an_exact_ir_valley_locs[k]); //red
-            n_y_ac=  an_y[an_exact_ir_valley_locs[k]] + n_y_ac/ (an_exact_ir_valley_locs[k+1] - an_exact_ir_valley_locs[k])  ; 
+            n_y_ac= (an_y[pn_exact_ir_valley_locs[k+1]] - an_y[pn_exact_ir_valley_locs[k] ] )*(n_y_dc_max_idx -pn_exact_ir_valley_locs[k]); //red
+            n_y_ac=  an_y[pn_exact_ir_valley_locs[k]] + n_y_ac/ (pn_exact_ir_valley_locs[k+1] - pn_exact_ir_valley_locs[k])  ; 
         
         
             n_y_ac=  an_y[n_y_dc_max_idx] - n_y_ac;    // subracting linear DC compoenents from raw 
-            n_x_ac= (an_x[an_exact_ir_valley_locs[k+1]] - an_x[an_exact_ir_valley_locs[k] ] )*(n_x_dc_max_idx -an_exact_ir_valley_locs[k]); // ir
-            n_x_ac=  an_x[an_exact_ir_valley_locs[k]] + n_x_ac/ (an_exact_ir_valley_locs[k+1] - an_exact_ir_valley_locs[k]); 
+            n_x_ac= (an_x[pn_exact_ir_valley_locs[k+1]] - an_x[pn_exact_ir_valley_locs[k] ] )*(n_x_dc_max_idx -pn_exact_ir_valley_locs[k]); // ir
+            n_x_ac=  an_x[pn_exact_ir_valley_locs[k]] + n_x_ac/ (pn_exact_ir_valley_locs[k+1] - pn_exact_ir_valley_locs[k]); 
             n_x_ac=  an_x[n_y_dc_max_idx] - n_x_ac;      // subracting linear DC compoenents from raw 
             n_nume=( n_y_ac *n_x_dc_max)>>7 ; //prepare X100 to preserve floating value
             n_denom= ( n_x_ac *n_y_dc_max)>>7;
@@ -249,6 +276,8 @@ void maxim_heart_rate_and_oxygen_saturation(uint32_t *pun_ir_buffer,  int32_t n_
         *pn_spo2 =  -999 ; // do not use SPO2 since signal ratio is out of range
         *pch_spo2_valid  = 0; 
     }
+
+    *pn_exact_ir_valley_locs_count = n_exact_ir_valley_locs_count;
 }
 
 
@@ -257,6 +286,11 @@ void maxim_find_peaks(int32_t *pn_locs, int32_t *pn_npks, int32_t *pn_x, int32_t
 * \brief        Find peaks
 * \par          Details
 *               Find at most MAX_NUM peaks above MIN_HEIGHT separated by at least MIN_DISTANCE
+*
+*               LOCS are the indices of the peak locations within X
+*               NPKS is th number of peaks that were found
+*               X is the vector of points (the signal)
+*               SIZE is the length of X
 *
 * \retval       None
 */
@@ -271,6 +305,11 @@ void maxim_peaks_above_min_height(int32_t *pn_locs, int32_t *pn_npks, int32_t  *
 * \brief        Find peaks above n_min_height
 * \par          Details
 *               Find all peaks above MIN_HEIGHT
+*
+*               LOCS are the indices of the peak locations within X
+*               NPKS is th number of peaks that were found
+*               X is the vector of points (the signal)
+*               SIZE is the length of X
 *
 * \retval       None
 */
