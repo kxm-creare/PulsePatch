@@ -22,8 +22,10 @@
 #define OUTPUT_BLE 2
 
 // DATA PACKET FORMATS
-#define PKT_TYPE_MAX 0x00
-#define PKT_TYPE_ADS 0x01
+#define PKT_TYPE_MAX_WFM 0x00
+#define PKT_TYPE_MAX_AUX 0x01
+#define PKT_TYPE_ADS_WFM 0x02
+#define PKT_TYPE_ADS_AUX 0x03
 
 //  MAX30102 REGISTERS
 #define MAX_ADD   0x57  // slave address
@@ -86,6 +88,9 @@
 #define MAX_PW_215  0x02
 #define MAX_PW_411  0x03
 #define MAX_TEMP_EN 0x01
+
+// Algorithm buffer stuff
+#define IR_BUFFER_LENGTH 400 // DO NOT CHANGE (much).  This is slightly more than three packets worth of samples (downsampled to 100 Hz).
 
 // filter stuff
 #define CUTTOFF_LOW 0.5
