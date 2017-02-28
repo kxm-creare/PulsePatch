@@ -7,9 +7,7 @@
 #include <Wire.h>
 #include <SPI.h>
 #include "PulsePatch_Definitions.h"
-//#include "PulsePatch.h"
 #include <SimbleeBLE.h>
-#include "algorithm.h"
 
 //Added by Chip 2016-09-28 to enable plotting by Arduino Serial Plotter
 //Modified by Joel December, 2016
@@ -32,41 +30,24 @@ char tempInteger;
 char tempFraction;
 float Celcius;
 float Fahrenheit;
-int MAX_sampleRate;
-long MAX_packetNumber; // Counter telling us how many MAX waveform packets we've sent.  Also allows us to calculate sample number.
-int MAX_packetSampleNumber = 0; // counter of samples within a packet
-long REDvalue[4];
-long IRvalue[4];
+char MAX_sampleCounter = 0xFF;
+int MAX_packetSampleNumber = 1;
+int REDvalue[4];
+int IRvalue[4];
 char mode = MAX_SPO2_MODE;  // MAX_SPO2_MODE or MAX_HR_MODE
 char readPointer;
 char writePointer;
 char ovfCounter;
 int rAmp = 10;
 int irAmp = 10;
-uint32_t RED_buffer[IR_BUFFER_LENGTH];
-uint32_t IR_buffer[IR_BUFFER_LENGTH];
-int IR_buffer_counter = 0; // how many points in the IR buffer are filled.  If IR_buffer_counter=IR_BUFFER_LENGTH, data must be shifted.
-int32_t IR_valley_locs[15]; // the locations within the buffer where a valley is within the IR buffer data
-int32_t num_IR_valleys; // How many valleys have been located within the IR buffer data
-uint32_t IRvalleyQueue_packetNumber[15]; // the locations of valleys that are queued up and ready to send
-uint32_t IRvalleyQueue_packetSampleNumber[15]; // the locations of valleys that are queued up and ready to send
-uint32_t IRvalleyQueue_instHR[15]; // the locations of valleys that are queued up and ready to send
-int IRvalleyQueue_length = 0; // How many valleys are in the queue?
-int32_t MAX_avg_SpO2; // avg SpO2 across the duration of the buffer
-int8_t MAX_SpO2_valid; // Does the algorithm think the calculated SpO2 is valid?
-int32_t MAX_avg_HR; // avg HR across the duration of the buffer
-int8_t MAX_HR_valid; // Does the algorithm think the calculated HR is valid?
 
 // ADS VARIABLES:
 byte ADS_channelDataRaw[6];
 int ADS_channelDataInt[2];
 int ECGvalue[6];
 volatile boolean ADS_interrupt = false;
-int ADS_internalCounter = 0;
-long ADS_packetNumber; // Counting every waveform packet we send.  Starts with 0.
-int ADS_packetSampleNumber = 0; // Sample # within a waveform packet
-unsigned long runTimer;
 byte ADS_sampleCounter = 0;
+char ADS_packetNumber;
 boolean isRunning = false;
 long ADSstatus;   // first 3 bytes of each sample is the ADSstatus
 byte regData[12];           // array is used to mirror register data
@@ -75,13 +56,9 @@ boolean verbosity = false;
 //  TESTING
 unsigned int thisTestTime;
 unsigned int thatTestTime;
-unsigned int timeStartAll;
-unsigned int timeEndAll;
-unsigned int dtAll;
-unsigned int timeStart1;
-unsigned int timeEnd1;
-unsigned int dt1;
 
+byte dummyByte;
+char dummyChar;
 
 // FAKING THE ADS INTERRUPT LOOP
 // unsigned int ADS_timer = 0;
@@ -106,22 +83,24 @@ char MAX_radioBuffer[20];
 char ADS_radioBuffer[20];
 
 void setup(){
-
-  Wire.beginOnPins(SCL_PIN,SDA_PIN);
-  SPI.begin();
-  SPI.setDataMode(SPI_MODE1);
-  SPI.setFrequency(4000);
-  SPI.setDataMode(MSBFIRST);
+  
   pinMode(ADS_SS,OUTPUT); digitalWrite(ADS_SS,HIGH);
   pinMode(ADS_DRDY,INPUT);
   attachPinInterrupt(ADS_DRDY,ADS_ISR,LOW);
   pinMode(MAX_INT,INPUT_PULLUP);
   attachPinInterrupt(MAX_INT,MAX_ISR,LOW);
-
+  
+  Wire.beginOnPins(SCL_PIN,SDA_PIN);
+  SPI.begin();
+  SPI.setDataMode(SPI_MODE1);
+  SPI.setFrequency(1000);
+  SPI.setDataMode(MSBFIRST);
+  
+  
 
   boardLEDstate = true;
-  pinMode(RED_LED,OUTPUT); digitalWrite(RED_LED,boardLEDstate);
-  pinMode(GRN_LED,OUTPUT); digitalWrite(GRN_LED,!boardLEDstate);
+  pinMode(RED_LED,OUTPUT); digitalWrite(RED_LED,LOW);
+  pinMode(GRN_LED,OUTPUT); digitalWrite(GRN_LED,LOW);
   pinMode(TACT_SWITCH,INPUT);
   lastSwitchState = digitalRead(TACT_SWITCH);
 
@@ -130,7 +109,7 @@ void setup(){
     case OUTPUT_NORMAL:
       Serial.begin(230400);
       delay(10);
-      Serial.println("\nPulsePatch v0.2.0\n");
+      Serial.println("\nPulsePatch 020\n");
       break;
     case OUTPUT_PLOTTER:
       Serial.begin(230400);
@@ -172,14 +151,23 @@ void loop(){
   }
   if(ADS_interrupt){
     updateChannelData(); // go see what ADS event woke us up, and do the work
-    if(millis() - runTimer > 10000){
-      stopADS();
-      Serial.println("test complete");
-    }
   }
 
-//  blinkBoardLEDs();
+  blinkBoardLEDs();
   readSwitch();
+
+//  digitalWrite(ADS_SS,LOW);        //  open SPI
+//  delay10();
+//  SPI.transfer(0x20);          //  opcode1
+//  delay10();
+//  SPI.transfer(0x00);           //  opcode2
+//  delay10();
+//  dummyChar = SPI.transfer(0x00);//  update mirror location with returned byte
+//  delay10();
+//  digitalWrite(ADS_SS,HIGH);       //  close SPI
+//  Serial.print("ADS ID = 0x");
+//  Serial.println(dummyChar,HEX);
+//  delay(500);
 
   eventSerial(); // see if there's anything on the serial port; if so, process it
 }
@@ -191,7 +179,7 @@ void blinkBoardLEDs(){
       LED_timer = millis();
       boardLEDstate = !boardLEDstate;
       digitalWrite(RED_LED,boardLEDstate);
-//      digitalWrite(GRN_LED,!boardLEDstate);
+      digitalWrite(GRN_LED,!boardLEDstate);
     }
 }
 

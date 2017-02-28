@@ -38,8 +38,7 @@ void MAX_serviceInterrupts(){
 void serialPPG(){
   if (OUTPUT_TYPE != OUTPUT_PLOTTER) {
     Serial.println();  // formatting...
-    Serial.print(MAX_packetNumber,DEC); printTab();
-    Serial.print(MAX_packetSampleNumber,DEC); printTab();
+    Serial.print(MAX_sampleCounter,DEC); printTab();
     Serial.print(REDvalue[MAX_packetSampleNumber]); printTab();
     Serial.print(IRvalue[MAX_packetSampleNumber]);
   } else {
@@ -56,25 +55,18 @@ void serialPPG(){
 
 //
 void readPPG(){
-  if( (MAX_packetNumber & 0x3F) == 0){
-    if(MAX_packetSampleNumber == 0){
-      // At the beginning of packet #0 (mod 64):
-      MAX30102_writeRegister(MAX_TEMP_CONFIG,0x01); // start a temperature conversion
-    }
-  } //  NOT SURE IF THIS BELONGS HERE
+  MAX_sampleCounter++;
+  if(MAX_sampleCounter > 200){
+    MAX_sampleCounter = 1;
+    MAX30102_writeRegister(MAX_TEMP_CONFIG,0x01); // start a temperature conversion
+  }
   MAX_readFIFOdata();
-  // }  // OR IF IT BELONGS HERE
 }
 
 // read in the FIFO data three bytes per ADC result
 void MAX_readFIFOdata(){
   char dataByte[6];
   int byteCounter = 0;
-  long thisREDvalue;
-  long thisIRvalue;
-  int thisValleyLoc; // just used to prevent repeated calls into an array.
-  long buffer_reference_packet_number; // the packet from which we start counting, when sending peak data from the buffer
-
   MAX_packetSampleNumber++;
   if(MAX_packetSampleNumber == 4){
     MAX_packetSampleNumber = 0;
@@ -87,262 +79,68 @@ void MAX_readFIFOdata(){
     dataByte[byteCounter] = Wire.read();
     byteCounter++;
   }
+  REDvalue[MAX_packetSampleNumber] = 0; IRvalue[MAX_packetSampleNumber] = 0;
 
-  // interpret six bytes as two sensor values
-  thisREDvalue = 0L;
-  thisREDvalue = (dataByte[0] & 0xFF); thisREDvalue <<= 8;
-  thisREDvalue |= dataByte[1]; thisREDvalue <<= 8;
-  thisREDvalue |= dataByte[2];
-  thisREDvalue &= 0x0003FFFF;
-
-  thisIRvalue = 0L;
-  thisIRvalue = (dataByte[3] & 0xFF); thisIRvalue <<= 8;
-  thisIRvalue |= dataByte[4]; thisIRvalue <<= 8;
-  thisIRvalue |= dataByte[5];
-  thisIRvalue &= 0x0003FFFF;
-
-  // USE THESE DATA IN TWO PLACES: 1) FOR SENDING RAW DATA, and 2) FOR FINDING PEAKS:
-
-  // 1) SEND RAW DATA:
-  // Fill the value arrays for packing packets:
-  REDvalue[MAX_packetSampleNumber] = thisREDvalue;
-  IRvalue[MAX_packetSampleNumber] = thisIRvalue;
+  REDvalue[MAX_packetSampleNumber] = (dataByte[0] & 0xFF); REDvalue[MAX_packetSampleNumber] <<= 8;
+  REDvalue[MAX_packetSampleNumber] |= dataByte[1]; REDvalue[MAX_packetSampleNumber] <<= 8;
+  REDvalue[MAX_packetSampleNumber] |= dataByte[2];
+  IRvalue[MAX_packetSampleNumber] = (dataByte[3] & 0xFF); IRvalue[MAX_packetSampleNumber] <<= 8;
+  IRvalue[MAX_packetSampleNumber] |= dataByte[4]; IRvalue[MAX_packetSampleNumber] <<= 8;
+  IRvalue[MAX_packetSampleNumber] |= dataByte[5];
+  REDvalue[MAX_packetSampleNumber] &= 0x0003FFFF;
+  IRvalue[MAX_packetSampleNumber] &= 0x0003FFFF;
 
   if(useFilter){
     filterHP(REDvalue[MAX_packetSampleNumber], IRvalue[MAX_packetSampleNumber]);
   }
 
-  // Send a waveform packet
-  if(OUTPUT_TYPE == OUTPUT_BLE && MAX_packetSampleNumber == 3){
-    MAX_packWFMsamples();
-    MAX_sendSamplesBLE();
-  }
-
-  // 2) FIND PEAKS:
-  // Fill the buffer for the peak detection algorithm (but first average down to 100 SPS):
-  if ( (MAX_packetSampleNumber == 0) || (MAX_packetSampleNumber == 2) ) {
-    IR_buffer[IR_buffer_counter] = thisIRvalue;
-    RED_buffer[IR_buffer_counter] = thisREDvalue;
-  } else {
-    IR_buffer[IR_buffer_counter] = (IR_buffer[IR_buffer_counter] + thisIRvalue)>>1; // average two samples
-    RED_buffer[IR_buffer_counter] = (RED_buffer[IR_buffer_counter] + thisREDvalue)>>1; //average two samples
-    IR_buffer_counter++;
-  }
-
-  // If the buffer is full, run the peak detection/hr/SpO2 algorithm and send a packet
-  if (IR_buffer_counter==IR_BUFFER_LENGTH) {
-    timeStart1 = micros();
-    maxim_heart_rate_and_oxygen_saturation_details(IR_buffer, IR_BUFFER_LENGTH, RED_buffer, &MAX_avg_SpO2, &MAX_SpO2_valid, &MAX_avg_HR, &MAX_HR_valid, IR_valley_locs, &num_IR_valleys);
-    // Correct SpO2 for -999 (invalid):
-    if (MAX_avg_SpO2 < 0) {
-      MAX_avg_SpO2 = 0;
-    }
-    buffer_reference_packet_number = (MAX_packetNumber & 0xFFFFFFC0)-64;
-    Serial.print("Number of IR valleys: ");
-    Serial.println(num_IR_valleys);
-    //Process these peaks:
-    for(int i=0; i<num_IR_valleys; i++) {
-      thisValleyLoc = IR_valley_locs[i];
-      // Only queue up the peaks that were in the last packet's worth of data (the buffer happens to contain additional info, just for better averaging purposes).
-      if(thisValleyLoc < 3*128 && thisValleyLoc>=2*128 ) {
-        IRvalleyQueue_packetNumber[IRvalleyQueue_length] = buffer_reference_packet_number + ((thisValleyLoc-2*128) >> 1);
-        IRvalleyQueue_packetSampleNumber[IRvalleyQueue_length] = (thisValleyLoc & 0x01<<1); // the locations of valleys that are queued up and ready to send
-        if (i==0) {
-          IRvalleyQueue_instHR[IRvalleyQueue_length] = 0;
-        } else {
-          IRvalleyQueue_instHR[IRvalleyQueue_length] = 6000/(thisValleyLoc - IR_valley_locs[i-1]); // assuming 100 SPS
-          if (IRvalleyQueue_instHR[IRvalleyQueue_length]>255) {IRvalleyQueue_instHR[IRvalleyQueue_length]=255; }
-        }
-        IRvalleyQueue_length++;
-      }
-    }
-    // Now shift all the points to the left by 128, and adjust IR_buffer_counter accordingly
-    shift_buffer(IR_buffer,IR_BUFFER_LENGTH,128);
-    shift_buffer(RED_buffer,IR_BUFFER_LENGTH,128);
-    IR_buffer_counter = IR_buffer_counter-128;
-    // Send an AUX packet with this info:
-    timeEnd1 = micros();
-    dt1 += (timeEnd1-timeStart1);
-
-    MAX_packAUXsamples(buffer_reference_packet_number,0); // "0" means this is the basic AUX packet
-    MAX_sendSamplesBLE();
-    // the packAUXsamples routine will pop things out of the queue.  If there are still peaks left in the queue, send another aux packet
-    while (IRvalleyQueue_length>0) {
-      MAX_packAUXsamples(buffer_reference_packet_number,1); // "1" means this is a bonus AUX packet, due to overflow
+    if(OUTPUT_TYPE == OUTPUT_BLE && MAX_packetSampleNumber == 3){
+      MAX_packsamples();
       MAX_sendSamplesBLE();
     }
-  }
-
 }
 
-// Pack waveform samples into a buffer for transmission via BLE
-void MAX_packWFMsamples(){
-  MAX_packetNumber++;
-  MAX_radioBuffer[0] = (PKT_TYPE_MAX_WFM<<6);
-  MAX_radioBuffer[0] |= ((MAX_packetNumber & 0x3F00) >> 8);
-  MAX_radioBuffer[1] = (MAX_packetNumber & 0xFF);
+// Pack samples into a buffer for transmission via BLE
+void MAX_packsamples(){
 
-  MAX_radioBuffer[2] =  ((REDvalue[0] &  0x0003FC00) >> 10);
-  MAX_radioBuffer[3] =  ((REDvalue[0] &  0x000003FC) >> 2);
-  MAX_radioBuffer[4] =  ((REDvalue[0] &  0x00000003) << 6);
-  MAX_radioBuffer[4] |= ((IRvalue[0] &  0x0003F000) >> 12);
-  MAX_radioBuffer[5] =  ((IRvalue[0] &  0x00000FF0) >> 4);
-  MAX_radioBuffer[6] =  ((IRvalue[0] &  0x0000000F) << 4);
-  MAX_radioBuffer[6] |= ((REDvalue[1] &  0x0003C000) >> 14);
-  MAX_radioBuffer[7] =  ((REDvalue[1] &  0x00003FC0) >> 6);
-  MAX_radioBuffer[8] =  ((REDvalue[1] &  0x0000003F) << 2);
-  MAX_radioBuffer[8] |= ((IRvalue[1] & 0x00030000) >> 16);
-  MAX_radioBuffer[9] = ((IRvalue[1] &  0x0000FF00) >> 8);
-  MAX_radioBuffer[10] = (IRvalue[1] &   0x000000FF);
-  MAX_radioBuffer[11] = ((REDvalue[2] &  0x0003FC00) >> 10);
-  MAX_radioBuffer[12] = ((REDvalue[2] &  0x000003FC) >> 2);
-  MAX_radioBuffer[13] = ((REDvalue[2] &  0x00000003) << 6);
-  MAX_radioBuffer[13] |= ((IRvalue[2] & 0x0003F000) >> 12);
-  MAX_radioBuffer[14] = ((IRvalue[2] &  0x00000FF0) >> 4);
-  MAX_radioBuffer[15] = ((IRvalue[2] &  0x0000000F) << 4);
-  MAX_radioBuffer[15] |= ((REDvalue[3] & 0x0003C000) >> 14);
-  MAX_radioBuffer[16] =  ((REDvalue[3] & 0x00003FC0) >> 6);
-  MAX_radioBuffer[17] =  ((REDvalue[3] & 0x0000003F) << 2);
-  MAX_radioBuffer[17] |= ((IRvalue[3] & 0x00030000) >> 16);
-  MAX_radioBuffer[18] =  ((IRvalue[3] & 0x0000FF00) >> 8);
-  MAX_radioBuffer[19] =   (IRvalue[3] & 0x000000FF);
+  MAX_radioBuffer[1] = ((REDvalue[0] &  0x0003FC00) >> 10);
+  MAX_radioBuffer[2] = ((REDvalue[0] &  0x000003FC) >> 2);
+  MAX_radioBuffer[3] = ((REDvalue[0] &  0x00000003) << 6);
+  MAX_radioBuffer[3] |= ((IRvalue[0] & 0x0003F000) >> 12);
+  MAX_radioBuffer[4] = ((IRvalue[0] &  0x00000FF0) >> 4);
+  MAX_radioBuffer[5] = ((IRvalue[0] &  0x0000000F) << 4);
+  MAX_radioBuffer[5] |= ((REDvalue[1] & 0x0003C000) >> 14);
+  MAX_radioBuffer[6] = ((REDvalue[1] &  0x00003FC0) >> 6);
+  MAX_radioBuffer[7] = ((REDvalue[1] &  0x0000003F) << 2);
+  MAX_radioBuffer[7] |= ((IRvalue[1] & 0x00030000) >> 16);
+  MAX_radioBuffer[8] = ((IRvalue[1] &  0x0000FF00) >> 8);
+  MAX_radioBuffer[9] = (IRvalue[1] &   0x000000FF);
+  MAX_radioBuffer[10] = ((REDvalue[2] &   0x0003FC00) >> 10);
+  MAX_radioBuffer[11] = ((REDvalue[2] &  0x000003FC) >> 2);
+  MAX_radioBuffer[12] = ((REDvalue[2] &  0x00000003) << 6);
+  MAX_radioBuffer[12] |= ((IRvalue[2] & 0x0003F000) >> 12);
+  MAX_radioBuffer[13] = ((IRvalue[2] &  0x00000FF0) >> 4);
+  MAX_radioBuffer[14] = ((IRvalue[2] &  0x0000000F) << 4);
+  MAX_radioBuffer[14] |= ((REDvalue[3] & 0x0003C000) >> 14);
+  MAX_radioBuffer[15] = ((REDvalue[3] &  0x00003FC0) >> 6);
+  MAX_radioBuffer[16] = ((REDvalue[3] &  0x0000003F) << 2);
+  MAX_radioBuffer[16] |= ((IRvalue[3] & 0x00030000) >> 16);
+  MAX_radioBuffer[17] = ((IRvalue[3] &  0x0000FF00) >> 8);
+  MAX_radioBuffer[18] = (IRvalue[3] &   0x000000FF);
 }
 
-// Pack AUX data into a buffer for transmission via BLE
-void MAX_packAUXsamples(long refpktno, int bonus){
-  int packed_samples;
-
-  if (IRvalleyQueue_length>6) {
-    packed_samples = 6;
-  } else {
-    packed_samples = IRvalleyQueue_length;
-  }
-
-  for(int i=0; i<20; i++) {
-    MAX_radioBuffer[i] = 0;
-  }
-
-  Serial.println(packed_samples);
-
-  MAX_radioBuffer[0]  = (PKT_TYPE_MAX_AUX<<6);
-  MAX_radioBuffer[0] |= ((bonus & 0x01) << 5); // note there are three blank spaces (bits 4-6)
-  MAX_radioBuffer[0] |= ((packed_samples & 0x07) << 2);
-  MAX_radioBuffer[0] |= ((refpktno & 0xC00000) >> 22);
-  MAX_radioBuffer[1]  = ((refpktno & 0x3FC000) >> 14);
-  MAX_radioBuffer[2]  = ((refpktno & 0x003FC0) >> 6);
-
-  for (int i=0; i<packed_samples; i++) {
-    MAX_radioBuffer[3+2*i]  = ((IRvalleyQueue_packetNumber[i] & 0x3F) << 2);
-    MAX_radioBuffer[3+2*i] |= ((IRvalleyQueue_packetSampleNumber[i] & 0x03) );
-    MAX_radioBuffer[4+2*i]  = ((IRvalleyQueue_instHR[0] & 0xFF) );
-  }
-
-  shift_buffer(IRvalleyQueue_packetNumber,15,packed_samples);
-  shift_buffer(IRvalleyQueue_packetSampleNumber,15,packed_samples);
-  shift_buffer(IRvalleyQueue_instHR,15,packed_samples);
-  IRvalleyQueue_length = IRvalleyQueue_length-packed_samples;
-
-  if (bonus==0) {
-    MAX_radioBuffer[15] |= ((MAX_HR_valid & 0x01) << 1);
-    MAX_radioBuffer[15] |= ((MAX_SpO2_valid & 0x01));
-    MAX_radioBuffer[16]  = MAX_avg_HR & 0xFF;
-    MAX_radioBuffer[17]  = MAX_avg_SpO2 & 0xFF;
-    MAX_radioBuffer[18]  = tempInteger;
-    MAX_radioBuffer[19]  = tempFraction;
-  }
-
-  /*
-  if (IRvalleyQueue_length>0) {
-    MAX_radioBuffer[3]  = (0x01) << 7;
-    MAX_radioBuffer[3] |= ((IRvalleyQueue_packetNumber[0] & 0x3F) << 1);
-    MAX_radioBuffer[3] |= ((IRvalleyQueue_packetSampleNumber[0] & 0x02) >> 1);
-    MAX_radioBuffer[4]  = ((IRvalleyQueue_packetSampleNumber[0] & 0x01) << 7);
-    MAX_radioBuffer[4] |= ((IRvalleyQueue_instHR[0] & 0xFE) >> 1);
-    MAX_radioBuffer[5]  = ((IRvalleyQueue_instHR[0] & 0x01) << 7);
-    packed_samples++;
-  }
-  if (IRvalleyQueue_length>1) {
-    MAX_radioBuffer[5] |= (0x01) << 6;
-    MAX_radioBuffer[5] |= ((IRvalleyQueue_packetNumber[1] & 0x3F) );
-    MAX_radioBuffer[6]  = ((IRvalleyQueue_packetSampleNumber[1] & 0x03) << 6);
-    MAX_radioBuffer[6] |= ((IRvalleyQueue_instHR[1] & 0xFC) >> 2);
-    MAX_radioBuffer[7]  = ((IRvalleyQueue_instHR[1] & 0x03) << 6);
-    packed_samples++;
-  }
-  if (IRvalleyQueue_length>2) {
-    MAX_radioBuffer[7] |= (0x01) << 5;
-    MAX_radioBuffer[7] |= ((IRvalleyQueue_packetNumber[2] & 0x3E) >> 1);
-    MAX_radioBuffer[8]  = ((IRvalleyQueue_packetNumber[2] & 0x01) << 7);
-    MAX_radioBuffer[8] |= ((IRvalleyQueue_packetSampleNumber[2] & 0x03) << 5);
-    MAX_radioBuffer[8] |= ((IRvalleyQueue_instHR[2] & 0xF8) >> 3);
-    MAX_radioBuffer[9]  = ((IRvalleyQueue_instHR[2] & 0x07) << 5);
-    packed_samples++;
-  }
-  if (IRvalleyQueue_length>3) {
-    MAX_radioBuffer[9]  |= (0x01) << 4;
-    MAX_radioBuffer[9]  |= ((IRvalleyQueue_packetNumber[3] & 0x3C) >> 2);
-    MAX_radioBuffer[10]  = ((IRvalleyQueue_packetNumber[3] & 0x03) << 6);
-    MAX_radioBuffer[10] |= ((IRvalleyQueue_packetSampleNumber[3] & 0x03) << 4);
-    MAX_radioBuffer[10] |= ((IRvalleyQueue_instHR[3] & 0xF0) >> 4);
-    MAX_radioBuffer[11]  = ((IRvalleyQueue_instHR[3] & 0x0F) << 4);
-    packed_samples++;
-  }
-  if (IRvalleyQueue_length>4) {
-    MAX_radioBuffer[11] |= (0x01) << 3;
-    MAX_radioBuffer[11] |= ((IRvalleyQueue_packetNumber[4] & 0x38) >> 3);
-    MAX_radioBuffer[12]  = ((IRvalleyQueue_packetNumber[4] & 0x07) << 5);
-    MAX_radioBuffer[12] |= ((IRvalleyQueue_packetSampleNumber[4] & 0x03) << 3);
-    MAX_radioBuffer[12] |= ((IRvalleyQueue_instHR[4] & 0xE0) >> 5);
-    MAX_radioBuffer[13]  = ((IRvalleyQueue_instHR[4] & 0x1F) << 3);
-    packed_samples++;
-  }
-  if (IRvalleyQueue_length>5) {
-    MAX_radioBuffer[13] |= (0x01) << 2;
-    MAX_radioBuffer[13] |= ((IRvalleyQueue_packetNumber[5] & 0x30) >> 4);
-    MAX_radioBuffer[14]  = ((IRvalleyQueue_packetNumber[5] & 0x0F) << 4);
-    MAX_radioBuffer[14] |= ((IRvalleyQueue_packetSampleNumber[5] & 0x03) << 2);
-    MAX_radioBuffer[14] |= ((IRvalleyQueue_instHR[5] & 0xC0) >> 6);
-    MAX_radioBuffer[15]  = ((IRvalleyQueue_instHR[5] & 0x3F) << 2);
-    packed_samples++;
-  }
-
-  if (bonus==0) {
-    MAX_radioBuffer[15] |= ((MAX_MAX_HR_valid & 0x01) << 1);
-    MAX_radioBuffer[15] |= ((MAX_SpO2_valid & 0x01));
-    MAX_radioBuffer[16]  = MAX_avg_HR & 0xFF;
-    MAX_radioBuffer[17]  = MAX_avg_SpO2 & 0xFF;
-    MAX_radioBuffer[18]  = tempInteger;
-    MAX_radioBuffer[19]  = tempFraction;
-  } else {
-    if (IRvalleyQueue_length>6) {
-      MAX_radioBuffer[15] |= (0x01) << 1;
-      MAX_radioBuffer[15] |= ((IRvalleyQueue_packetNumber[6] & 0x20) >> 5);
-      MAX_radioBuffer[16]  = ((IRvalleyQueue_packetNumber[6] & 0x1F) << 3);
-      MAX_radioBuffer[16] |= ((IRvalleyQueue_packetSampleNumber[6] & 0x03) << 1);
-      MAX_radioBuffer[16] |= ((IRvalleyQueue_instHR[6] & 0x80) >> 7);
-      MAX_radioBuffer[17]  = ((IRvalleyQueue_instHR[6] & 0x7F) << 1);
-      packed_samples++;
-    }
-    if (IRvalleyQueue_length>7) {
-      MAX_radioBuffer[17] |= (0x01);
-      MAX_radioBuffer[18]  = ((IRvalleyQueue_packetNumber[7] & 0x3F) << 2);
-      MAX_radioBuffer[18] |= ((IRvalleyQueue_packetSampleNumber[7] & 0x03) );
-      MAX_radioBuffer[19]  = ((IRvalleyQueue_instHR[7] & 0xFF) );
-      packed_samples++;
-    }
-  }
-  */
-
-}
-
-// Send the MAX packet via BLE
 void MAX_sendSamplesBLE(){
+  char MAX_packetNumber = MAX_sampleCounter>>2; // equivalent to dividing by 4.  If we have 6 samples per packet we'd need to divide by 6.
+  MAX_radioBuffer[0] = (PKT_TYPE_MAX<<6);
+  MAX_radioBuffer[0] |= MAX_packetNumber;
+  //Serial.print(MAX_packetNumber,DEC);  Serial.print('\t'); Serial.print(MAX_radioBuffer[0],HEX); Serial.print('\n');
+  MAX_radioBuffer[19] = 0;
+  if(MAX_packetNumber == 25){ MAX_radioBuffer[19] = tempInteger; }  // Serial.println(Celcius); }
+  if(MAX_packetNumber == 26){ MAX_radioBuffer[19] = tempFraction; }
   if (BLEconnected) {
     SimbleeBLE.send(MAX_radioBuffer, 20);
   }
 }
-
-
 
 /***************************************************
  *
@@ -358,6 +156,7 @@ void ADS_init(){
     WREG(ADS_CONFIG2,0xA0); // use the internal reference
     WREG(ADS_CH1SET,0x60);  // enable input normal on channel 1
     WREG(ADS_CH2SET,0x60);  // enable input normal on channel 2
+
     printADSregisters();    // report register values for confirmation
 
 }
@@ -367,7 +166,6 @@ void ADS_init(){
  void startADS(void)
  {
      ADS_sampleCounter = 0;
-     ADS_internalCounter = 0;
      _ADS_RDATAC(); // enter Read Data Continuous mode
      delay(1);
      _ADS_START();  // start the data acquisition
@@ -375,10 +173,11 @@ void ADS_init(){
      isRunning = true;
  }
 
+
+
  // CALLED WHEN DRDY PIN IS ASSERTED. NEW ADS DATA AVAILABLE!
  void updateChannelData(){
      ADS_interrupt = false;
-
      byte inByte;
      int byteCounter = 0; // count the raw ADS bytes. Should be six of them
 
@@ -406,21 +205,10 @@ void ADS_init(){
              ADS_channelDataInt[i] &= 0x00FFFFFF;
          }
      }
-     ECGvalue[ADS_internalCounter] = ADS_channelDataInt[0]; // collect channel 1 samples
-     ADS_internalCounter++;
-     if(ADS_internalCounter == 6){
-       ADS_internalCounter = 0;
-       if(BLEconnected){
-         ADS_packsamples();
-         ADS_sendSamplesBLE();
-       }
+     for(int i=0; i<2; i++){
+       Serial.print(ADS_channelDataInt[i]); Serial.print("\t");
      }
-     if(OUTPUT_TYPE == OUTPUT_NORMAL){
-       for(int i=0; i<2; i++){
-         Serial.print(ADS_channelDataInt[i]); Serial.print("\t");
-       }
-       Serial.println(); // verbosity
-     }
+     Serial.println();
  }
 
  // Stop the continuous data acquisition
@@ -441,6 +229,51 @@ void ADS_init(){
      Serial.write(ADS_channelDataRaw[i]);
    }
  }
+
+
+// read in the FIFO data three bytes per ADC result
+void ADS_serviceInterrupts(){
+  // char dataByte[] = {0x00, 0x00, 0x00};
+  // int byteCounter = 0;
+  // ADS_sampleCounter++;
+  // if(ADS_packetSampleNumber == 6){
+  //   ADS_packetSampleNumber = 0;
+  // }
+  //
+  // // Look at my awesomely fake data for channel 1!
+  // switch (ADS_packetSampleNumber) {
+  //   case 0:
+  //     // zero is fine
+  //     break;
+  //   case 1:
+  //     dataByte[1] = 0xFF; // 0x00FF00 = 65,280
+  //     break;
+  //   case 2:
+  //     dataByte[0] = 0x07; // 0x070000 = 458,752
+  //     break;
+  //   case 3:
+  //     dataByte[0] = 0x70; // 0x700000 = 7,340,032
+  //     break;
+  //   case 4:
+  //     dataByte[0] = 0xF7; // 0xF70000 = 16,187,392
+  //     break;
+  //   case 5:
+  //     dataByte[0] = 0xF0; // 0xF00000 = 15,728,640
+  //     break;
+  // }
+  //
+  // ECGvalue[ADS_packetSampleNumber] = 0;
+  // ECGvalue[ADS_packetSampleNumber] = (dataByte[0] & 0xFF); ECGvalue[ADS_packetSampleNumber] <<= 8;
+  // ECGvalue[ADS_packetSampleNumber] |= dataByte[1]; ECGvalue[ADS_packetSampleNumber] <<= 8;
+  // ECGvalue[ADS_packetSampleNumber] |= dataByte[2];
+  //
+  // ECGvalue[ADS_packetSampleNumber] &= 0x00FFFFFF;
+  //
+  // if(OUTPUT_TYPE == OUTPUT_BLE && ADS_packetSampleNumber == 5){
+//    ADS_packsamples();
+//    ADS_sendSamplesBLE();
+
+}
 
 // Pack samples into a buffer for transmission via BLE
 void ADS_packsamples(){
@@ -467,15 +300,16 @@ void ADS_packsamples(){
 
 void ADS_sendSamplesBLE(){
   ADS_packetNumber++;
-  int modPacketNumber = (ADS_packetNumber & 0x3F); // What is the packet number, mod 64?
+  if (ADS_packetNumber == 64) {
+    ADS_packetNumber = 0;
+  }
 
-  ADS_radioBuffer[0] = (PKT_TYPE_ADS_WFM<<6);
-  ADS_radioBuffer[0] |= (ADS_packetNumber & 0x3F);
+  ADS_radioBuffer[0] = (PKT_TYPE_ADS<<6);
+  ADS_radioBuffer[0] |= ADS_packetNumber;
   //Serial.print(MAX_packetNumber,DEC);  Serial.print('\t'); Serial.print(MAX_radioBuffer[0],HEX); Serial.print('\n');
   ADS_radioBuffer[19] = 0;
-  if(modPacketNumber == 0){ ADS_radioBuffer[19] = 0xFF & (ADS_packetNumber>>6); }  // For fun, put more of the packet number here
-  if(modPacketNumber == 25){ ADS_radioBuffer[19] = 0x22; }  // arbitrary thing I'm putting in here
-  if(modPacketNumber == 26){ ADS_radioBuffer[19] = 0x99; }  // another arbitrary thing.
+  if(ADS_packetNumber == 25){ ADS_radioBuffer[19] = 0x22; }  // arbitrary thing I'm putting in here
+  if(ADS_packetNumber == 26){ ADS_radioBuffer[19] = 0x99; }  // another arbitrary thing.
 //      Serial.println();
   if (BLEconnected) {
     SimbleeBLE.send(ADS_radioBuffer, 20);
@@ -506,34 +340,20 @@ void parseChar(char command){
     case 'b':
       Serial.println("start running");
       MAX_packetSampleNumber = -1;
-      MAX_packetNumber = 0;
-      IR_buffer_counter = 0;
-      IRvalleyQueue_length = 0;
+      MAX_sampleCounter = 0;
       enableMAX30102(true);
-      startADS();
       thatTestTime = micros();
-      timeStartAll = millis();
-      dt1 = 0;
       break;
     case 'a':
       Serial.println("start ADS");
-      runTimer = millis();
-      startADS();
+      _ADS_RDATAC();
+      delay(10);
+      _ADS_START();
       break;
     case 's':
       Serial.println("stop running");
       enableMAX30102(false);
-      stopADS();
-      timeEndAll = millis();
-      dtAll = timeEndAll-timeStartAll;
-      Serial.print("Run time: ");
-      Serial.print(dtAll);
-      Serial.println(" ms");
-      Serial.print("Time 1: ");
-      Serial.print(dt1/1000);
-      Serial.print(" ms (");
-      Serial.print(dt1/10/dtAll); // (dt_us/1000)/(dt_ms) *100 to get to %
-      Serial.println("% cpu)");
+      _ADS_STOP();
       break;
     case 't':
       MAX30102_writeRegister(MAX_TEMP_CONFIG,0x01);
@@ -971,10 +791,40 @@ void printRegName(char regToPrint){
      return ID;
  }
 
+
+ // void RDATA() {          //  use in Stop Read Continuous mode when DRDY goes low
+ //     byte inByte;            //  to read in one sample of the channels
+ //     digitalWrite(ADS_SS,LOW);        //  open SPI
+ //     SPI.transfer(ADS_RDATA);         //  send the RDATA command
+ //     for(int i=0; i<3; i++){   //  read in the status register and new channel data
+ //         inByte = SPI.transfer(0x00);
+ //         ADSstatus = (ADSstatus<<8) | inByte; //  read status register (1100 + LOFF_STATP + LOFF_STATN + GPIO[7:4])
+ //     }
+ //     for(int i = 0; i<2; i++){
+ //         for(int j=0; j<3; j++){   //  read in the new channel data
+ //             inByte = SPI.transfer(0x00);
+ //             ADS_channelDataRaw[i] = inByte;
+ //             ADS_channelDataInt[i] = ADS_channelDataInt[i]<<8) | inByte;
+ //         }
+ //     }
+ //         for(int i=0; i<8; i++){
+ //             if(bitRead(boardChannelDataInt[i],23) == 1){  // convert 3 byte 2's compliment to 4 byte 2's compliment
+ //             boardChannelDataInt[i] |= 0xFF000000;
+ //         }else{
+ //             boardChannelDataInt[i] &= 0x00FFFFFF;
+ //         }
+ //     }
+ // }
+ // digitalWrite(ADS_SS,HIGH);        //  close SPI
+ //
+ //
+ // }
+
+
 void delay10(){
   delayMicroseconds(10);
 }
-
+ 
 
 //  Read a single register from the ADS_SS
 //  Receives the address to be read, returns the result
@@ -1123,18 +973,61 @@ void delay10(){
      }
  }
 
+////////////////////////////////////
+//  dummy ADS funcions
+////////////////////////////////////
+
+ // void dummy_ADS_serviceInterrupts(){
+ //   ADS_interrupt = false;
+ //   readECG();
+ // }
 
 
-/***************************************************
- *
- *  GENERAL HELPER FUNCTIONS
- *
- ***************************************************/
+ // void dummy_readECG() {
+ //   ADS_readFIFOdata();
+ // }
 
 
-// shifts data in the_buffer, which has length buffer_len, to the left by shift_amt spots
-void shift_buffer(uint32_t *the_buffer, uint32_t buffer_len, int shift_amt) {
-  for(int i=shift_amt; i<buffer_len; i++) {
-    the_buffer[i-shift_amt] = the_buffer[i];
-  }
-}
+ // read in the FIFO data three bytes per ADC result
+ // void dummy_ADS_readFIFOdata(){
+ //   char dataByte[] = {0x00, 0x00, 0x00};
+ //   int byteCounter = 0;
+ //   ADS_packetSampleNumber++;
+ //   if(ADS_packetSampleNumber == 6){
+ //     ADS_packetSampleNumber = 0;
+ //   }
+ //
+ //   // Look at my awesomely fake data for channel 1!
+ //   switch (ADS_packetSampleNumber) {
+ //     case 0:
+ //       // zero is fine
+ //       break;
+ //     case 1:
+ //       dataByte[1] = 0xFF; // 0x00FF00 = 65,280
+ //       break;
+ //     case 2:
+ //       dataByte[0] = 0x07; // 0x070000 = 458,752
+ //       break;
+ //     case 3:
+ //       dataByte[0] = 0x70; // 0x700000 = 7,340,032
+ //       break;
+ //     case 4:
+ //       dataByte[0] = 0xF7; // 0xF70000 = 16,187,392
+ //       break;
+ //     case 5:
+ //       dataByte[0] = 0xF0; // 0xF00000 = 15,728,640
+ //       break;
+ //   }
+ //
+ //   ECGvalue[ADS_packetSampleNumber] = 0;
+ //   ECGvalue[ADS_packetSampleNumber] = (dataByte[0] & 0xFF); ECGvalue[ADS_packetSampleNumber] <<= 8;
+ //   ECGvalue[ADS_packetSampleNumber] |= dataByte[1]; ECGvalue[ADS_packetSampleNumber] <<= 8;
+ //   ECGvalue[ADS_packetSampleNumber] |= dataByte[2];
+ //
+ //   ECGvalue[ADS_packetSampleNumber] &= 0x00FFFFFF;
+ //
+ //   if(OUTPUT_TYPE == OUTPUT_BLE && ADS_packetSampleNumber == 5){
+//     ADS_packsamples();
+//     ADS_sendSamplesBLE();
+//   }
+// }
