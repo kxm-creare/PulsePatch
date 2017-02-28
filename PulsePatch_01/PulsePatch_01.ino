@@ -8,6 +8,7 @@
 #include "PulsePatch_Definitions.h"
 //#include "PulsePatch.h"
 #include <SimbleeBLE.h>
+#include "algorithm.h"
 
 //Added by Chip 2016-09-28 to enable plotting by Arduino Serial Plotter
 //Modified by Joel December, 2016
@@ -30,27 +31,48 @@ char tempInteger;
 char tempFraction;
 float Celcius;
 float Fahrenheit;
-char MAX_sampleCounter = 0xFF;
-int MAX_packetSampleNumber = 1;
-int REDvalue[4];
-int IRvalue[4];
+int MAX_sampleRate;
+long MAX_packetNumber; // Counter telling us how many MAX waveform packets we've sent.  Also allows us to calculate sample number.
+int MAX_packetSampleNumber = 0; // counter of samples within a packet
+long REDvalue[4];
+long IRvalue[4];
 char mode = MAX_SPO2_MODE;  // MAX_SPO2_MODE or MAX_HR_MODE
 char readPointer;
 char writePointer;
 char ovfCounter;
 int rAmp = 10;
 int irAmp = 10;
+uint32_t RED_buffer[IR_BUFFER_LENGTH];
+uint32_t IR_buffer[IR_BUFFER_LENGTH];
+int IR_buffer_counter = 0; // how many points in the IR buffer are filled.  If IR_buffer_counter=IR_BUFFER_LENGTH, data must be shifted.
+int32_t IR_valley_locs[15]; // the locations within the buffer where a valley is within the IR buffer data
+int32_t num_IR_valleys; // How many valleys have been located within the IR buffer data
+uint32_t IRvalleyQueue_packetNumber[15]; // the locations of valleys that are queued up and ready to send 
+uint32_t IRvalleyQueue_packetSampleNumber[15]; // the locations of valleys that are queued up and ready to send
+uint32_t IRvalleyQueue_instHR[15]; // the locations of valleys that are queued up and ready to send
+int IRvalleyQueue_length = 0; // How many valleys are in the queue?
+int32_t MAX_avg_SpO2; // avg SpO2 across the duration of the buffer
+int8_t MAX_SpO2_valid; // Does the algorithm think the calculated SpO2 is valid? 
+int32_t MAX_avg_HR; // avg HR across the duration of the buffer
+int8_t MAX_HR_valid; // Does the algorithm think the calculated HR is valid?
 
 // ADS VARIABLES:
 volatile boolean ADS_interrupt = false;
-int ADS_packetSampleNumber = 0;
-char ADS_packetNumber; 
+long ADS_packetNumber; // Counting every waveform packet we send.  Starts with 0.
+int ADS_packetSampleNumber = 0; // Sample # within a waveform packet
 long ECGvalue[6]; // using longs to make sure we can hold at least 24 bits.
 
 
 //  TESTING
 unsigned int thisTestTime;
 unsigned int thatTestTime;
+unsigned int timeStartAll;
+unsigned int timeEndAll;
+unsigned int dtAll;
+unsigned int timeStart1;
+unsigned int timeEnd1;
+unsigned int dt1;
+
 
 // FAKING THE ADS INTERRUPT LOOP
 unsigned int ADS_timer = 0;
@@ -104,6 +126,7 @@ void setup(){
 
   LED_timer = millis();
   MAX_init(MAX_SR_200); // initialize MAX30102, specify sampleRate
+  MAX_sampleRate = 200;
   if (useFilter){ initFilter(); }
   if (OUTPUT_TYPE != OUTPUT_PLOTTER) {
     MAX_printAllRegisters();
