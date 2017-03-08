@@ -509,6 +509,11 @@ void parseChar(char command){
     case 'F':
       useFilter = true;
       break;
+    case 'w':
+      wiggle = true;
+      wiggleStart = millis();
+      wiggleLast = 0;
+      break;
     case '1':
       rAmp++; if(rAmp > 50){rAmp = 50;}
       setLEDamplitude(rAmp, irAmp);
@@ -549,6 +554,7 @@ void printHelpToSerial() {
   Serial.println(F("   '?'  Print all registers"));
   Serial.println(F("   'F'  Turn on filters"));
   Serial.println(F("   'f'  Turn off filters"));
+  Serial.println(F("   'w'  Flash (wiggle) for 5 seconds"));
 }
 
 // Print tab to serial port

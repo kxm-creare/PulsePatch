@@ -22,6 +22,10 @@ unsigned int LED_timer;
 int LED_delayTime = 300;
 boolean boardLEDstate = HIGH;
 int lastSwitchState;
+boolean wiggle = false;
+boolean wiggleState = 0;
+long wiggleStart;
+long wiggleLast;
 
 // MAX VARIABLES:
 volatile boolean MAX_interrupt = false;
@@ -155,7 +159,7 @@ void loop(){
   blinkBoardLEDs();
   readSwitch();
 
-  fakeADSinterrupt(); // fake the ADS interrupting at 500 Hz.
+  //fakeADSinterrupt(); // fake the ADS interrupting at 500 Hz.
 
   eventSerial(); // see if there's anything on the serial port; if so, process it
 }
@@ -172,11 +176,26 @@ void fakeADSinterrupt() {
 // RED_LED blinks when not connected to BLE
 // GRN_LED steady on when BLE connected
 void blinkBoardLEDs(){
-  if((millis()-LED_timer > LED_delayTime) && !BLEconnected){
+  int dt_wiggle;
+
+  if((millis()-LED_timer > LED_delayTime) && !BLEconnected && ~wiggle){
       LED_timer = millis();
       boardLEDstate = !boardLEDstate;
       digitalWrite(RED_LED,boardLEDstate);
     }
+
+  if(wiggle) {
+    dt_wiggle = millis() - wiggleStart;
+    if(dt_wiggle < 5000) {
+        if ( dt_wiggle-wiggleLast > 100) {
+          wiggleState = !wiggleState;
+          digitalWrite(RED_LED,wiggleState);
+          wiggleLast = dt_wiggle;
+        }
+    } else {
+      wiggle = false;
+    }
+  }
 }
 
 void readSwitch(){
