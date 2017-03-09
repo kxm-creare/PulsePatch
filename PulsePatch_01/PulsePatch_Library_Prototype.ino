@@ -73,6 +73,9 @@ void MAX_readFIFOdata(){
   long thisIRvalue;
   int thisValleyLoc; // just used to prevent repeated calls into an array.
   long buffer_reference_packet_number; // the packet from which we start counting, when sending peak data from the buffer
+  int HRsum;
+  int HRcount;
+  int HRtmp;
 
   MAX_packetSampleNumber++;
   if(MAX_packetSampleNumber == 4){
@@ -140,21 +143,31 @@ void MAX_readFIFOdata(){
     //Serial.print("Number of IR valleys: ");
     //Serial.println(num_IR_valleys);
     //Process these peaks:
-    for(int i=0; i<num_IR_valleys; i++) {
+    HRsum = 0;
+    HRcount = 0;
+
+    for(int i=1; i<num_IR_valleys; i++) {
       thisValleyLoc = IR_valley_locs[i];
+      HRtmp = 6000/(thisValleyLoc - IR_valley_locs[i-1]); // assuming 100 SPS
+      // Average the good Heart Rates; correct the bad ones.
+      if (HRtmp<255) {
+        HRsum += HRtmp;
+        HRcount++;
+      } else {
+        HRtmp=255; 
+      }
       // Only queue up the peaks that were in the last packet's worth of data (the buffer happens to contain additional info, just for better averaging purposes).
       if(thisValleyLoc < 3*128 && thisValleyLoc>=2*128 ) {
         IRvalleyQueue_packetNumber[IRvalleyQueue_length] = buffer_reference_packet_number + ((thisValleyLoc-2*128) >> 1); 
         IRvalleyQueue_packetSampleNumber[IRvalleyQueue_length] = (thisValleyLoc & 0x01<<1); // the locations of valleys that are queued up and ready to send
-        if (i==0) {
-          IRvalleyQueue_instHR[IRvalleyQueue_length] = 0;
-        } else {
-          IRvalleyQueue_instHR[IRvalleyQueue_length] = 6000/(thisValleyLoc - IR_valley_locs[i-1]); // assuming 100 SPS
-          if (IRvalleyQueue_instHR[IRvalleyQueue_length]>255) {IRvalleyQueue_instHR[IRvalleyQueue_length]=255; }
-        }
+        IRvalleyQueue_instHR[IRvalleyQueue_length] = HRtmp; 
         IRvalleyQueue_length++;
       }
     }
+
+    // OVERWRITE AVERAGE HEARTRATE FROM MAXIM ALGORITHM:
+    MAX_avg_HR = HRsum/HRcount;
+
     // Now shift all the points to the left by 128, and adjust IR_buffer_counter accordingly
     shift_buffer(IR_buffer,IR_BUFFER_LENGTH,128);
     shift_buffer(RED_buffer,IR_BUFFER_LENGTH,128);
