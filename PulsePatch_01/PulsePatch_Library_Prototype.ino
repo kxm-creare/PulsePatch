@@ -137,8 +137,8 @@ void MAX_readFIFOdata(){
       MAX_avg_SpO2 = 0;
     } 
     buffer_reference_packet_number = (MAX_packetNumber & 0xFFFFFFC0)-64;
-    Serial.print("Number of IR valleys: ");
-    Serial.println(num_IR_valleys);
+    //Serial.print("Number of IR valleys: ");
+    //Serial.println(num_IR_valleys);
     //Process these peaks:
     for(int i=0; i<num_IR_valleys; i++) {
       thisValleyLoc = IR_valley_locs[i];
@@ -233,7 +233,7 @@ void MAX_packAUXsamples(long refpktno, int bonus){
   for (int i=0; i<packed_samples; i++) {
     MAX_radioBuffer[3+2*i]  = ((IRvalleyQueue_packetNumber[i] & 0x3F) << 2);
     MAX_radioBuffer[3+2*i] |= ((IRvalleyQueue_packetSampleNumber[i] & 0x03) );
-    MAX_radioBuffer[4+2*i]  = ((IRvalleyQueue_instHR[0] & 0xFF) );
+    MAX_radioBuffer[4+2*i]  = ((IRvalleyQueue_instHR[i] & 0xFF) );
   }
 
   shift_buffer(IRvalleyQueue_packetNumber,15,packed_samples);
