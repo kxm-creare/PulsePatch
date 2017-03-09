@@ -14,7 +14,7 @@
 //Set to OUTPUT_NORMAL for normal verbose print() statements
 //Set to OUTPUT_PLOTTER for Arduino Serial Plotter formatting
 //Set to OUTPUT_BLE to enable BLE
-const int OUTPUT_TYPE = OUTPUT_NORMAL;
+const int OUTPUT_TYPE = OUTPUT_PLOTTER;
 
 // LED/Board Functions
 unsigned int LED_timer;
@@ -136,7 +136,14 @@ void setup(){
     Serial.println();
   } else {
     //when configured for the Arduino Serial Plotter, start the system running right away
-    enableMAX30102(true);
+
+    //start PPG
+    //enableMAX30102(true);
+
+    //start ECG
+    _ADS_RDATAC();
+    delay(10);
+    _ADS_START();
     thatTestTime = micros();
   }
 

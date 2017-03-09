@@ -152,10 +152,10 @@ void MAX_sendSamplesBLE(){
 void ADS_init(){
     _ADS_RESET();
     delay(10);
-    WREG(ADS_CONFIG1,0x02); // sample rate of 500SPs
-    WREG(ADS_CONFIG2,0xA0); // use the internal reference
-    WREG(ADS_CH1SET,0x60);  // enable input normal on channel 1
-    WREG(ADS_CH2SET,0x60);  // enable input normal on channel 2
+    WREG(ADS_CONFIG1,0b00000000); // 0x02 = sample rate of 500SPs
+    WREG(ADS_CONFIG2,0b10100000); // 0xA0, use the internal reference, do test signal as 0b10100011
+    WREG(ADS_CH1SET,0b01100000);  // 0x60 enable input normal on channel 1, gain 12, test signal ends 0101
+    WREG(ADS_CH2SET,0b01100001);  // 0x60 enable input normal on channel 2, gain 12, shorted is last bit = 1
 
     printADSregisters();    // report register values for confirmation
 
@@ -182,13 +182,13 @@ void ADS_init(){
      int byteCounter = 0; // count the raw ADS bytes. Should be six of them
 
      digitalWrite(ADS_SS,LOW);       //  open SPI
-     for(int i=0; i<3; i++){
-         inByte = SPI.transfer(0x00);    //  read status register (1100 + LOFF_STATP + LOFF_STATN + GPIO[7:4])
+     for(int i=0; i<3; i++){    //  read status register (1100 + LOFF_STATP + LOFF_STATN + GPIO[7:4])
+         inByte = SPI.transfer(0x00);
          ADSstatus = (ADSstatus << 8) | inByte;
      }
-     for(int i = 0; i<2; i++){
+     for(int i = 0; i<2; i++){  //  read 2 channels of 24 bits of channel data in 3 byte chunks
        ADS_channelDataInt[i] = 0;
-         for(int j=0; j<3; j++){   //  read 24 bits of channel data in 8 3 byte chunks
+         for(int j=0; j<3; j++){   
              inByte = SPI.transfer(0x00);
              ADS_channelDataRaw[byteCounter] = inByte;  // raw data goes here
              byteCounter++;
@@ -205,7 +205,9 @@ void ADS_init(){
              ADS_channelDataInt[i] &= 0x00FFFFFF;
          }
      }
-     for(int i=0; i<2; i++){
+
+     //print data to serial port
+     for(int i=0; i<1; i++){  //print 1 channel or both?
        Serial.print(ADS_channelDataInt[i]); Serial.print("\t");
      }
      Serial.println();
@@ -338,7 +340,7 @@ void parseChar(char command){
       printHelpToSerial();
       break;
     case 'b':
-      Serial.println("start running");
+      Serial.println("start PPG");
       MAX_packetSampleNumber = -1;
       MAX_sampleCounter = 0;
       enableMAX30102(true);
@@ -408,8 +410,9 @@ void parseChar(char command){
 void printHelpToSerial() {
   Serial.println(F("Commands:"));
   Serial.println(F("   'h'  Print this help information on available commands"));
-  Serial.println(F("   'b'  Start the thing running at the sample rate selected"));
-  Serial.println(F("   's'  Stop the thing running"));
+  Serial.println(F("   'a'  Start the ECG running"));
+  Serial.println(F("   'b'  Start the PPG running"));
+  Serial.println(F("   's'  Stop the PPG and stop the ECG"));
   Serial.println(F("   't'  Initiate a temperature conversion. This should work if 'b' is pressed or not"));
   Serial.println(F("   'i'  Query the interrupt flags register. Not really useful"));
   Serial.println(F("   'v'  Verify the device by querying the RevID and PartID registers (hex 6 and hex 15 respectively)"));
