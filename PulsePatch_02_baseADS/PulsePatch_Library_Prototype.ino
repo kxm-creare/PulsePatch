@@ -152,7 +152,7 @@ void MAX_sendSamplesBLE(){
 void ADS_init(){
     _ADS_RESET();
     delay(10);
-    WREG(ADS_CONFIG1,0b00000000); // 0x02 = sample rate of 500SPs
+    WREG(ADS_CONFIG1,0b00000010); // 0x02 = sample rate of 500SPs
     WREG(ADS_CONFIG2,0b10100000); // 0xA0, use the internal reference, do test signal as 0b10100011
     WREG(ADS_CH1SET,0b01100000);  // 0x60 enable input normal on channel 1, gain 12, test signal ends 0101
     WREG(ADS_CH2SET,0b01100001);  // 0x60 enable input normal on channel 2, gain 12, shorted is last bit = 1
