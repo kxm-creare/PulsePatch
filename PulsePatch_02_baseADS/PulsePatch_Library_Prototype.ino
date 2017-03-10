@@ -165,7 +165,7 @@ void ADS_init(){
 //  Start the ADS running
  void startADS(void)
  {
-     ADS_sampleCounter = 0;
+     ADS_packetNumber = 0;
      _ADS_RDATAC(); // enter Read Data Continuous mode
      delay(1);
      _ADS_START();  // start the data acquisition
@@ -211,6 +211,20 @@ void ADS_init(){
        Serial.print(ADS_channelDataInt[i]); Serial.print("\t");
      }
      Serial.println();
+
+     // queue up the data for tranport via bluetooth
+     ADS_packetSampleNumber++;
+     if(ADS_packetSampleNumber == 6){
+       ADS_packetSampleNumber = 0;
+     }
+
+     ECGvalue[ADS_packetSampleNumber] = ADS_channelDataInt[0]; // only taking 1 channel for now.
+
+     if(OUTPUT_TYPE == OUTPUT_BLE && ADS_packetSampleNumber == 5){
+      ADS_packsamples();
+      ADS_sendSamplesBLE();
+    }
+
  }
 
  // Stop the continuous data acquisition
@@ -279,40 +293,33 @@ void ADS_serviceInterrupts(){
 
 // Pack samples into a buffer for transmission via BLE
 void ADS_packsamples(){
+  ADS_packetNumber++;
 
-  ADS_radioBuffer[1]  = ((ECGvalue[0] &  0x00FF0000) >> 16);
-  ADS_radioBuffer[2]  = ((ECGvalue[0] &  0x0000FF00) >> 8);
-  ADS_radioBuffer[3]  =  (ECGvalue[0] &  0x000000FF);
-  ADS_radioBuffer[4]  = ((ECGvalue[1] &  0x00FF0000) >> 16);
-  ADS_radioBuffer[5]  = ((ECGvalue[1] &  0x0000FF00) >> 8);
-  ADS_radioBuffer[6]  =  (ECGvalue[1] &  0x000000FF);
-  ADS_radioBuffer[7]  = ((ECGvalue[2] &  0x00FF0000) >> 16);
-  ADS_radioBuffer[8]  = ((ECGvalue[2] &  0x0000FF00) >> 8);
-  ADS_radioBuffer[9]  =  (ECGvalue[2] &  0x000000FF);
-  ADS_radioBuffer[10] = ((ECGvalue[3] &  0x00FF0000) >> 16);
-  ADS_radioBuffer[11] = ((ECGvalue[3] &  0x0000FF00) >> 8);
-  ADS_radioBuffer[12] =  (ECGvalue[3] &  0x000000FF);
-  ADS_radioBuffer[13] = ((ECGvalue[4] &  0x00FF0000) >> 16);
-  ADS_radioBuffer[14] = ((ECGvalue[4] &  0x0000FF00) >> 8);
-  ADS_radioBuffer[15] =  (ECGvalue[4] &  0x000000FF);
-  ADS_radioBuffer[16] = ((ECGvalue[5] &  0x00FF0000) >> 16);
-  ADS_radioBuffer[17] = ((ECGvalue[5] &  0x0000FF00) >> 8);
-  ADS_radioBuffer[18] =  (ECGvalue[5] &  0x000000FF);
+  ADS_radioBuffer[0] = (PKT_TYPE_ADS<<6);
+  ADS_radioBuffer[0] |= ((ADS_packetNumber & 0x3F00) >> 8);
+  ADS_radioBuffer[1] = (ADS_packetNumber & 0xFF);
+
+  ADS_radioBuffer[2]  = ((ECGvalue[0] &  0x00FF0000) >> 16);
+  ADS_radioBuffer[3]  = ((ECGvalue[0] &  0x0000FF00) >> 8);
+  ADS_radioBuffer[4]  =  (ECGvalue[0] &  0x000000FF);
+  ADS_radioBuffer[5]  = ((ECGvalue[1] &  0x00FF0000) >> 16);
+  ADS_radioBuffer[6]  = ((ECGvalue[1] &  0x0000FF00) >> 8);
+  ADS_radioBuffer[7]  =  (ECGvalue[1] &  0x000000FF);
+  ADS_radioBuffer[8]  = ((ECGvalue[2] &  0x00FF0000) >> 16);
+  ADS_radioBuffer[9]  = ((ECGvalue[2] &  0x0000FF00) >> 8);
+  ADS_radioBuffer[10]  =  (ECGvalue[2] &  0x000000FF);
+  ADS_radioBuffer[11] = ((ECGvalue[3] &  0x00FF0000) >> 16);
+  ADS_radioBuffer[12] = ((ECGvalue[3] &  0x0000FF00) >> 8);
+  ADS_radioBuffer[13] =  (ECGvalue[3] &  0x000000FF);
+  ADS_radioBuffer[14] = ((ECGvalue[4] &  0x00FF0000) >> 16);
+  ADS_radioBuffer[15] = ((ECGvalue[4] &  0x0000FF00) >> 8);
+  ADS_radioBuffer[16] =  (ECGvalue[4] &  0x000000FF);
+  ADS_radioBuffer[17] = ((ECGvalue[5] &  0x00FF0000) >> 16);
+  ADS_radioBuffer[18] = ((ECGvalue[5] &  0x0000FF00) >> 8);
+  ADS_radioBuffer[19] =  (ECGvalue[5] &  0x000000FF);
 }
 
 void ADS_sendSamplesBLE(){
-  ADS_packetNumber++;
-  if (ADS_packetNumber == 64) {
-    ADS_packetNumber = 0;
-  }
-
-  ADS_radioBuffer[0] = (PKT_TYPE_ADS<<6);
-  ADS_radioBuffer[0] |= ADS_packetNumber;
-  //Serial.print(MAX_packetNumber,DEC);  Serial.print('\t'); Serial.print(MAX_radioBuffer[0],HEX); Serial.print('\n');
-  ADS_radioBuffer[19] = 0;
-  if(ADS_packetNumber == 25){ ADS_radioBuffer[19] = 0x22; }  // arbitrary thing I'm putting in here
-  if(ADS_packetNumber == 26){ ADS_radioBuffer[19] = 0x99; }  // another arbitrary thing.
-//      Serial.println();
   if (BLEconnected) {
     SimbleeBLE.send(ADS_radioBuffer, 20);
   }
