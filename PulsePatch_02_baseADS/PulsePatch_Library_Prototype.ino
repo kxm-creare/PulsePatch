@@ -131,7 +131,7 @@ void MAX_packsamples(){
 
 void MAX_sendSamplesBLE(){
   char MAX_packetNumber = MAX_sampleCounter>>2; // equivalent to dividing by 4.  If we have 6 samples per packet we'd need to divide by 6.
-  MAX_radioBuffer[0] = (PKT_TYPE_MAX<<6);
+  MAX_radioBuffer[0] = (PKT_TYPE_MAX_WFM<<6);
   MAX_radioBuffer[0] |= MAX_packetNumber;
   //Serial.print(MAX_packetNumber,DEC);  Serial.print('\t'); Serial.print(MAX_radioBuffer[0],HEX); Serial.print('\n');
   MAX_radioBuffer[19] = 0;
@@ -208,9 +208,9 @@ void ADS_init(){
 
      //print data to serial port
      for(int i=0; i<1; i++){  //print 1 channel or both?
-       Serial.print(ADS_channelDataInt[i]); Serial.print("\t");
+       //Serial.print(ADS_channelDataInt[i]); Serial.print("\t");
      }
-     Serial.println();
+     //Serial.println();
 
      // queue up the data for tranport via bluetooth
      ADS_packetSampleNumber++;
@@ -295,7 +295,7 @@ void ADS_serviceInterrupts(){
 void ADS_packsamples(){
   ADS_packetNumber++;
 
-  ADS_radioBuffer[0] = (PKT_TYPE_ADS<<6);
+  ADS_radioBuffer[0] = (PKT_TYPE_ADS_WFM<<6);
   ADS_radioBuffer[0] |= ((ADS_packetNumber & 0x3F00) >> 8);
   ADS_radioBuffer[1] = (ADS_packetNumber & 0xFF);
 
@@ -322,6 +322,7 @@ void ADS_packsamples(){
 void ADS_sendSamplesBLE(){
   if (BLEconnected) {
     SimbleeBLE.send(ADS_radioBuffer, 20);
+    //Serial.println("Sending ADS Waveform Packet.");
   }
 }
 
@@ -355,6 +356,7 @@ void parseChar(char command){
       break;
     case 'a':
       Serial.println("start ADS");
+      ADS_packetSampleNumber = -1;
       _ADS_RDATAC();
       delay(10);
       _ADS_START();
