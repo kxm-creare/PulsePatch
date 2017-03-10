@@ -22,8 +22,8 @@
 #define OUTPUT_BLE 2
 
 // DATA PACKET FORMATS
-#define PKT_TYPE_MAX 0x00
-#define PKT_TYPE_ADS 0x01
+#define PKT_TYPE_MAX_WFM 0x00
+#define PKT_TYPE_ADS_WFM 0x02
 
 //  MAX30102 REGISTERS
 #define MAX_ADD   0x57  // slave address

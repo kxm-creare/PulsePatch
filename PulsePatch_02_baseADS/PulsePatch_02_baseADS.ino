@@ -14,7 +14,7 @@
 //Set to OUTPUT_NORMAL for normal verbose print() statements
 //Set to OUTPUT_PLOTTER for Arduino Serial Plotter formatting
 //Set to OUTPUT_BLE to enable BLE
-const int OUTPUT_TYPE = OUTPUT_PLOTTER;
+const int OUTPUT_TYPE = OUTPUT_BLE;
 
 // LED/Board Functions
 unsigned int LED_timer;
@@ -46,8 +46,8 @@ byte ADS_channelDataRaw[6];
 int ADS_channelDataInt[2];
 int ECGvalue[6];
 volatile boolean ADS_interrupt = false;
-byte ADS_sampleCounter = 0;
-char ADS_packetNumber;
+int ADS_packetSampleNumber = 0;
+long ADS_packetNumber;
 boolean isRunning = false;
 long ADSstatus;   // first 3 bytes of each sample is the ADSstatus
 byte regData[12];           // array is used to mirror register data
