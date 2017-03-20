@@ -194,6 +194,7 @@ void blinkBoardLEDs(){
         }
     } else {
       wiggle = false;
+      digitalWrite(RED_LED,0); // end the wiggle with the red LED off.
     }
   }
 }
