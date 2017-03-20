@@ -56,7 +56,7 @@ void serialPPG(){
 //
 void readPPG(){
   MAX_sampleCounter++;
-  if(MAX_sampleCounter > 200){
+  if(MAX_sampleCounter > 512){
     MAX_sampleCounter = 1;
     MAX30102_writeRegister(MAX_TEMP_CONFIG,0x01); // start a temperature conversion
   }
@@ -97,49 +97,91 @@ void MAX_readFIFOdata(){
     if(OUTPUT_TYPE == OUTPUT_BLE && MAX_packetSampleNumber == 3){
       MAX_packsamples();
       MAX_sendSamplesBLE();
+    if ((MAX_sampleCounter&0xFF) > 251) {
+      Serial.print("Sending fake max aux data (MAX_sampleCounter = ");
+      Serial.println(MAX_sampleCounter,DEC);
+      MAX_packFakeAUX();
+      MAX_sendSamplesBLE();
+    }
+
     }
 }
 
 // Pack samples into a buffer for transmission via BLE
 void MAX_packsamples(){
+  long MAX_packetNumber = MAX_sampleCounter>>2; // equivalent to dividing by 4.  If we have 6 samples per packet we'd need to divide by 6.
 
-  MAX_radioBuffer[1] = ((REDvalue[0] &  0x0003FC00) >> 10);
-  MAX_radioBuffer[2] = ((REDvalue[0] &  0x000003FC) >> 2);
-  MAX_radioBuffer[3] = ((REDvalue[0] &  0x00000003) << 6);
-  MAX_radioBuffer[3] |= ((IRvalue[0] & 0x0003F000) >> 12);
-  MAX_radioBuffer[4] = ((IRvalue[0] &  0x00000FF0) >> 4);
-  MAX_radioBuffer[5] = ((IRvalue[0] &  0x0000000F) << 4);
-  MAX_radioBuffer[5] |= ((REDvalue[1] & 0x0003C000) >> 14);
-  MAX_radioBuffer[6] = ((REDvalue[1] &  0x00003FC0) >> 6);
-  MAX_radioBuffer[7] = ((REDvalue[1] &  0x0000003F) << 2);
-  MAX_radioBuffer[7] |= ((IRvalue[1] & 0x00030000) >> 16);
-  MAX_radioBuffer[8] = ((IRvalue[1] &  0x0000FF00) >> 8);
-  MAX_radioBuffer[9] = (IRvalue[1] &   0x000000FF);
-  MAX_radioBuffer[10] = ((REDvalue[2] &   0x0003FC00) >> 10);
-  MAX_radioBuffer[11] = ((REDvalue[2] &  0x000003FC) >> 2);
-  MAX_radioBuffer[12] = ((REDvalue[2] &  0x00000003) << 6);
-  MAX_radioBuffer[12] |= ((IRvalue[2] & 0x0003F000) >> 12);
-  MAX_radioBuffer[13] = ((IRvalue[2] &  0x00000FF0) >> 4);
-  MAX_radioBuffer[14] = ((IRvalue[2] &  0x0000000F) << 4);
-  MAX_radioBuffer[14] |= ((REDvalue[3] & 0x0003C000) >> 14);
-  MAX_radioBuffer[15] = ((REDvalue[3] &  0x00003FC0) >> 6);
-  MAX_radioBuffer[16] = ((REDvalue[3] &  0x0000003F) << 2);
-  MAX_radioBuffer[16] |= ((IRvalue[3] & 0x00030000) >> 16);
-  MAX_radioBuffer[17] = ((IRvalue[3] &  0x0000FF00) >> 8);
-  MAX_radioBuffer[18] = (IRvalue[3] &   0x000000FF);
+  MAX_radioBuffer[0] = (PKT_TYPE_MAX_WFM<<6);
+  MAX_radioBuffer[0] |= ((MAX_packetNumber & 0x3F00) >> 8);
+  MAX_radioBuffer[1] = (MAX_packetNumber & 0xFF);
+
+  MAX_radioBuffer[2] =  ((REDvalue[0] &  0x0003FC00) >> 10);
+  MAX_radioBuffer[3] =  ((REDvalue[0] &  0x000003FC) >> 2);
+  MAX_radioBuffer[4] =  ((REDvalue[0] &  0x00000003) << 6);
+  MAX_radioBuffer[4] |= ((IRvalue[0] &  0x0003F000) >> 12);
+  MAX_radioBuffer[5] =  ((IRvalue[0] &  0x00000FF0) >> 4);
+  MAX_radioBuffer[6] =  ((IRvalue[0] &  0x0000000F) << 4);
+  MAX_radioBuffer[6] |= ((REDvalue[1] &  0x0003C000) >> 14);
+  MAX_radioBuffer[7] =  ((REDvalue[1] &  0x00003FC0) >> 6);
+  MAX_radioBuffer[8] =  ((REDvalue[1] &  0x0000003F) << 2);
+  MAX_radioBuffer[8] |= ((IRvalue[1] & 0x00030000) >> 16);
+  MAX_radioBuffer[9] = ((IRvalue[1] &  0x0000FF00) >> 8);
+  MAX_radioBuffer[10] = (IRvalue[1] &   0x000000FF);
+  MAX_radioBuffer[11] = ((REDvalue[2] &  0x0003FC00) >> 10);
+  MAX_radioBuffer[12] = ((REDvalue[2] &  0x000003FC) >> 2);
+  MAX_radioBuffer[13] = ((REDvalue[2] &  0x00000003) << 6);
+  MAX_radioBuffer[13] |= ((IRvalue[2] & 0x0003F000) >> 12);
+  MAX_radioBuffer[14] = ((IRvalue[2] &  0x00000FF0) >> 4);
+  MAX_radioBuffer[15] = ((IRvalue[2] &  0x0000000F) << 4);
+  MAX_radioBuffer[15] |= ((REDvalue[3] & 0x0003C000) >> 14);
+  MAX_radioBuffer[16] =  ((REDvalue[3] & 0x00003FC0) >> 6);
+  MAX_radioBuffer[17] =  ((REDvalue[3] & 0x0000003F) << 2);
+  MAX_radioBuffer[17] |= ((IRvalue[3] & 0x00030000) >> 16);
+  MAX_radioBuffer[18] =  ((IRvalue[3] & 0x0000FF00) >> 8);
+  MAX_radioBuffer[19] =   (IRvalue[3] & 0x000000FF);
 }
 
 void MAX_sendSamplesBLE(){
-  char MAX_packetNumber = MAX_sampleCounter>>2; // equivalent to dividing by 4.  If we have 6 samples per packet we'd need to divide by 6.
-  MAX_radioBuffer[0] = (PKT_TYPE_MAX_WFM<<6);
-  MAX_radioBuffer[0] |= MAX_packetNumber;
-  //Serial.print(MAX_packetNumber,DEC);  Serial.print('\t'); Serial.print(MAX_radioBuffer[0],HEX); Serial.print('\n');
-  MAX_radioBuffer[19] = 0;
-  if(MAX_packetNumber == 25){ MAX_radioBuffer[19] = tempInteger; }  // Serial.println(Celcius); }
-  if(MAX_packetNumber == 26){ MAX_radioBuffer[19] = tempFraction; }
   if (BLEconnected) {
     SimbleeBLE.send(MAX_radioBuffer, 20);
   }
+}
+
+void MAX_packFakeAUX() {
+  int bonus = 0;
+  int packed_samples = 0;
+  long refpktno = ((MAX_sampleCounter>>2) & 0xFFFFFFC0)-64;
+  int MAX_HR_valid = 1;
+  int MAX_SpO2_valid = 1;
+  int MAX_avg_HR = 66;
+  int MAX_avg_SpO2 = 100;
+
+  if (MAX_sampleCounter>500) {
+    MAX_avg_HR = 65;
+    MAX_avg_SpO2 = 99;
+  }
+
+  // FAKE THE MAX_AUX PACKET:
+  for(int i=0; i<20; i++) {
+    MAX_radioBuffer[i] = 0;
+  }
+
+  MAX_radioBuffer[0]  = (PKT_TYPE_MAX_AUX<<6);
+  MAX_radioBuffer[0] |= ((bonus & 0x01) << 5); // note there are three blank spaces (bits 4-6)
+  MAX_radioBuffer[0] |= ((packed_samples & 0x07) << 2); 
+  MAX_radioBuffer[0] |= ((refpktno & 0xC00000) >> 22);
+  MAX_radioBuffer[1]  = ((refpktno & 0x3FC000) >> 14);
+  MAX_radioBuffer[2]  = ((refpktno & 0x003FC0) >> 6);
+
+  if (bonus==0) {
+    MAX_radioBuffer[15] |= ((MAX_HR_valid & 0x01) << 1);
+    MAX_radioBuffer[15] |= ((MAX_SpO2_valid & 0x01));
+    MAX_radioBuffer[16]  = MAX_avg_HR & 0xFF;
+    MAX_radioBuffer[17]  = MAX_avg_SpO2 & 0xFF;
+    MAX_radioBuffer[18]  = tempInteger;
+    MAX_radioBuffer[19]  = tempFraction;
+  }
+
 }
 
 /***************************************************

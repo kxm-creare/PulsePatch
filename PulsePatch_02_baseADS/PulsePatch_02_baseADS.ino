@@ -30,7 +30,7 @@ char tempInteger;
 char tempFraction;
 float Celcius;
 float Fahrenheit;
-char MAX_sampleCounter = 0xFF;
+int MAX_sampleCounter = 0xFF;
 int MAX_packetSampleNumber = 1;
 int REDvalue[4];
 int IRvalue[4];
