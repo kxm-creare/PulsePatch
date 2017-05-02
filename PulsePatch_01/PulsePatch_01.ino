@@ -82,6 +82,12 @@ unsigned int dt1;
 unsigned int ADS_timer = 0;
 int ADS_delayTime = 2; // 500 SPS
 
+// FAKING THE MAX INTERRUPT LOOP
+boolean send_fake_max_data = false; //DO YOU WANT TO FAKE FAKE FAKE FAKE FAKE??
+unsigned int MAX_timer = 0;
+int MAX_delayTime = 1280; // the packet rate.
+long fake_buffer_reference_packet_number=0; // the packet from which we start counting, when sending peak data from the buffer
+
 // MAX FILTER STUFF
 char sampleRate;
 boolean useFilter = false;
@@ -149,9 +155,14 @@ ADS_timer = millis();
 
 void loop(){
 
-  if(MAX_interrupt){
-    MAX_serviceInterrupts(); // go see what MAX event woke us up, and do the work
+  if(send_fake_max_data) {
+    fakeMAXpacket();
+  } else {
+    if(MAX_interrupt){
+      MAX_serviceInterrupts(); // go see what MAX event woke us up, and do the work
+    }
   }
+
   if(ADS_interrupt){
     ADS_serviceInterrupts(); // go see what ADS event woke us up, and do the work
   }
@@ -162,6 +173,40 @@ void loop(){
   //fakeADSinterrupt(); // fake the ADS interrupting at 500 Hz.
 
   eventSerial(); // see if there's anything on the serial port; if so, process it
+}
+
+
+// Fake the ADS interrupt, for now
+void fakeMAXpacket() {
+  int fake_hr_variability = random(-2,3); //-2:2
+  int fake_avg_hr = random(76,80); //76:79
+
+  if(millis()-MAX_timer > MAX_delayTime) {
+    MAX_timer = MAX_timer + MAX_delayTime; // make sure we stay at targeted interrupt rate
+
+    //fake the data:
+    fake_buffer_reference_packet_number = fake_buffer_reference_packet_number + 64;
+
+    IRvalleyQueue_length = 2;
+    IRvalleyQueue_packetNumber[0] = fake_buffer_reference_packet_number + 0; 
+    IRvalleyQueue_packetSampleNumber[0] = 0; // the locations of valleys that are queued up and ready to send
+    IRvalleyQueue_instHR[0] = fake_avg_hr-fake_hr_variability; 
+    IRvalleyQueue_packetNumber[1] = fake_buffer_reference_packet_number + 32; 
+    IRvalleyQueue_packetSampleNumber[1] = 0; // the locations of valleys that are queued up and ready to send
+    IRvalleyQueue_instHR[1] = fake_avg_hr+fake_hr_variability; 
+
+    MAX_HR_valid  = 1;
+    MAX_SpO2_valid  = 1;
+    MAX_avg_HR = fake_avg_hr;
+    MAX_avg_SpO2 = random(99,101); //99:100
+    tempInteger = 0x25; //37 C
+    tempFraction = 0x00;
+
+    //send the fake data:
+    MAX_packAUXsamples(fake_buffer_reference_packet_number,0); // "0" means this is the basic AUX packet
+    MAX_sendSamplesBLE();
+
+  }
 }
 
 

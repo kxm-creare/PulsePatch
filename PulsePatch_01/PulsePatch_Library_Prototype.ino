@@ -527,6 +527,9 @@ void parseChar(char command){
       wiggleStart = millis();
       wiggleLast = 0;
       break;
+    case 'z':
+      send_fake_max_data = !send_fake_max_data;
+      break;
     case '1':
       rAmp++; if(rAmp > 50){rAmp = 50;}
       setLEDamplitude(rAmp, irAmp);
@@ -568,6 +571,7 @@ void printHelpToSerial() {
   Serial.println(F("   'F'  Turn on filters"));
   Serial.println(F("   'f'  Turn off filters"));
   Serial.println(F("   'w'  Flash (wiggle) for 5 seconds"));
+  Serial.println(F("   'z'  Toggle the fake data mode"));
 }
 
 // Print tab to serial port
